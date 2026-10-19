@@ -1,6 +1,6 @@
 {
   "name": "llm-wiki",
-  "version": "0.16.58",
+  "version": "0.16.59",
   "description": "Search, read and update a selected llm-wiki knowledge workspace from Claude.",
   "author": {
     "name": "dotdrelle"
