@@ -1,18 +1,45 @@
 {
   "name": "@dotdrelle/dsh-llm-wiki",
   "version": "0.1.0",
-  "description": "Read-only llm-wiki MCP integration for DeepSeek Harness",
+  "description": "Per-workspace llm-wiki access and optional production jobs for DeepSeek Harness",
   "type": "module",
   "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "README.md",
+    "build-client.mjs",
     "cordis.patch.yml",
     "index.mjs",
-    "readonly-mcp.mjs"
+    "client.mjs",
+    "client.js",
+    "readonly-mcp.mjs",
+    "workspace-mcp-bridge.mjs",
+    "workspace.mjs"
   ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  },
+  "scripts": {
+    "build:client": "node build-client.mjs"
+  },
+  "bin": {
+    "llm-wiki-dsh-workspace": "./workspace.mjs"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
     }
   }
 }

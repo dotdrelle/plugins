@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createWorkspaceProfile, defaultRoot, listWorkspaces } from './workspace.mjs';
 
 export const name = 'llm-wiki-dsh-paths';
 
@@ -23,4 +25,63 @@ export function apply(ctx) {
   }
 
   ctx.provide('llmWikiDshPaths', { bridgePath, connectorPath });
+
+  ctx.inject(['connection', 'workspaceRegistry'], (workspaceCtx) => {
+    const register = (method, handler) => workspaceCtx.effect(
+      () => workspaceCtx.connection.fetch.register({
+        path: `/api/llmWikiWorkspace/${method}`,
+        methods: ['POST'],
+        requestBody: 'buffered',
+        fetch: async (request) => {
+          let message;
+          try {
+            message = await request.json();
+          } catch {
+            return new Response('invalid JSON-RPC request', { status: 400 });
+          }
+          if (message?.type !== 'client-request'
+            || typeof message.rpcId !== 'string'
+            || message.method !== `llmWikiWorkspace/${method}`) {
+            return new Response('invalid workspace RPC envelope', { status: 400 });
+          }
+          let result;
+          try {
+            result = { ok: true, value: await handler(message.payload) };
+          } catch (error) {
+            result = {
+              ok: false,
+              error: {
+                code: 'workspace-request-failed',
+                message: error instanceof Error ? error.message : String(error),
+                details: {},
+              },
+            };
+          }
+          return Response.json({ type: 'server-response', rpcId: message.rpcId, result });
+        },
+      }),
+      `llm-wiki Harness workspace ${method} route`,
+    );
+
+    register('list', async () => ({ workspaces: await listWorkspaces(defaultRoot) }));
+    register('create', async (payload) => {
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new Error('Workspace form data is required.');
+      }
+      const { workspace, directory } = await createWorkspaceProfile(payload, defaultRoot);
+      try {
+        await workspaceCtx.workspaceRegistry.create(directory, workspace.name);
+      } catch (error) {
+        await rm(directory, { recursive: true, force: true });
+        throw error;
+      }
+      return {
+        name: workspace.name,
+        slug: workspace.slug,
+        path: directory,
+        productionEnabled: Boolean(workspace.production),
+        mcpLoaderRequired: true,
+      };
+    });
+  });
 }
