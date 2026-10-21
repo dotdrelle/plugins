@@ -12,7 +12,7 @@ import { createInterface as createLineInterface } from 'node:readline';
 const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Kept equal to mcpb/manifest.json and claude-plugin/.claude-plugin/plugin.json:
 // the build scripts refuse to package when the three disagree.
-const CONNECTOR_VERSION = '0.16.60';
+const CONNECTOR_VERSION = '0.16.62';
 
 function configPath() {
   if (process.env.LLM_WIKI_CONNECTOR_CONFIG) return resolve(process.env.LLM_WIKI_CONNECTOR_CONFIG);
