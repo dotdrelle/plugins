@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "llm-wiki-<workspace>": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "<plugin-root>/bin/llm-wiki-connect.mjs",
+        "mcp",
+        "--workspace",
+        "<workspace>"
+      ],
+      "env": {
+        "WIKI_MANAGER_STATE_DIR": "<manager-state-directory>"
+      }
+    }
+  }
+}
