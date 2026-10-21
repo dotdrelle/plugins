@@ -2,6 +2,7 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -149,6 +150,56 @@ function discoverWorkspaces() {
     }
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function workspaceConfigFile(workspace) {
+  const names = readdirSync(workspace.workspacePath)
+    .filter((name) => /^\.wikirc\.ya?ml(?:\.[^/\\]+)?$/.test(name));
+  let activeName = null;
+  try {
+    const record = JSON.parse(readFileSync(join(workspace.workspacePath, '.wiki', 'active-profile.json'), 'utf8'));
+    const fileName = typeof record?.fileName === 'string' ? record.fileName.trim() : '';
+    const profile = typeof record?.profile === 'string' ? record.profile.trim() : '';
+    if (/^\.wikirc\.ya?ml(?:\.[^/\\]+)?$/.test(fileName)) activeName = fileName;
+    else if (profile) activeName = profile === 'default' ? '.wikirc.yaml' : `.wikirc.yaml.${profile}`;
+  } catch {
+    // Older workspaces have no active-profile record; use their available files.
+  }
+
+  const ordered = [...new Set([
+    activeName,
+    '.wikirc.yaml',
+    '.wikirc.yml',
+    '.wikirc.yaml.default',
+    ...names.sort(),
+  ].filter((name) => name && names.includes(name)))];
+  if (!ordered.length) return undefined;
+
+  const engineHome = homeConfig().engineHome;
+  const YAML = createRequire(join(engineHome, 'package.json'))('yaml');
+  const parsed = [];
+  for (const name of ordered) {
+    try {
+      const value = YAML.parse(readFileSync(join(workspace.workspacePath, name), 'utf8')) ?? {};
+      const accessKey = value && typeof value === 'object' && !Array.isArray(value)
+        ? value.mcp?.accessKey
+        : undefined;
+      parsed.push({ name, accessKey });
+    } catch {
+      // Leave malformed profiles to the engine's normal, actionable diagnostic.
+    }
+  }
+
+  const token = workspace.mcpAuthToken;
+  const matching = parsed.find((profile) => token && profile.accessKey === token);
+  if (matching) return matching.name;
+
+  const active = parsed.find((profile) => profile.name === activeName);
+  if (active && active.accessKey == null) return active.name;
+
+  // A profile without its own key lets the engine resolve the manager-issued
+  // WIKI_MCP_AUTH_TOKEN from the child environment.
+  return parsed.find((profile) => profile.accessKey == null)?.name ?? null;
 }
 
 function discoverWorkspaceSkills(workspace) {
@@ -384,13 +435,21 @@ async function runMultiMcp() {
   let childRequestId = 0;
   const children = [];
   for (const workspace of workspaces) {
+    const configFile = workspaceConfigFile(workspace);
+    if (configFile === null) {
+      console.error(`llm-wiki connector: workspace ${workspace.name} skipped (no .wikirc profile accepts its MCP credential).`);
+      continue;
+    }
+    const childEnv = {
+      ...process.env,
+      WIKI_WORKSPACE_PATH: workspace.workspacePath,
+      ...(workspace.mcpAuthToken ? { WIKI_MCP_AUTH_TOKEN: workspace.mcpAuthToken } : {}),
+    };
+    if (configFile) childEnv.WIKI_CONFIG_PATH = configFile;
+    else delete childEnv.WIKI_CONFIG_PATH;
     const child = spawn(process.execPath, [entrypoint, 'mcp'], {
       cwd: workspace.workspacePath,
-      env: {
-        ...process.env,
-        WIKI_WORKSPACE_PATH: workspace.workspacePath,
-        ...(workspace.mcpAuthToken ? { WIKI_MCP_AUTH_TOKEN: workspace.mcpAuthToken } : {}),
-      },
+      env: childEnv,
       stdio: ['pipe', 'pipe', 'inherit'],
     });
     const pending = new Map();
@@ -779,13 +838,20 @@ try {
   if (command === 'mcp') {
     const entrypoint = process.env.LLM_WIKI_ENTRYPOINT || resolve(homeConfig().engineHome, 'dist/bin/wiki.js');
     if (!existsSync(entrypoint)) throw new Error(`llm-wiki entrypoint not found: ${entrypoint}`);
+    const configFile = workspaceConfigFile(workspace);
+    if (configFile === null) {
+      throw new Error(`No .wikirc profile accepts the MCP credential for workspace ${workspace.name}.`);
+    }
+    const childEnv = {
+      ...process.env,
+      WIKI_WORKSPACE_PATH: workspace.workspacePath,
+      ...(workspace.mcpAuthToken ? { WIKI_MCP_AUTH_TOKEN: workspace.mcpAuthToken } : {}),
+    };
+    if (configFile) childEnv.WIKI_CONFIG_PATH = configFile;
+    else delete childEnv.WIKI_CONFIG_PATH;
     const child = spawn(process.execPath, [entrypoint, 'mcp'], {
       cwd: workspace.workspacePath,
-      env: {
-        ...process.env,
-        WIKI_WORKSPACE_PATH: workspace.workspacePath,
-        ...(workspace.mcpAuthToken ? { WIKI_MCP_AUTH_TOKEN: workspace.mcpAuthToken } : {}),
-      },
+      env: childEnv,
       stdio: 'inherit',
     });
     child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
