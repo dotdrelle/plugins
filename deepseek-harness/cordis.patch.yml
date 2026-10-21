@@ -1,0 +1,15 @@
+- insert:
+    - id: llm-wiki-dsh-paths
+      name: '@dotdrelle/dsh-llm-wiki'
+    - id: llm-wiki-dsh-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      inject:
+        - llmWikiDshPaths
+      config:
+        serverName: llm_wiki
+        transport: stdio
+        command: !!js process.env.LLM_WIKI_NODE || 'node'
+        args:
+          - !!js ctx.llmWikiDshPaths.bridgePath
+        env:
+          LLM_WIKI_CONNECTOR: !!js ctx.llmWikiDshPaths.connectorPath
