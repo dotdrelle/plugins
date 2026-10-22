@@ -2,13 +2,21 @@ import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createWorkspaceProfile, defaultRoot, listWorkspaces } from './workspace.mjs';
+import z from '@deepseek-ai/schemastery';
+import { createWorkspaceProfile, defaultRoot, listWorkspaces, validateServeUrl } from './workspace.mjs';
 
 export const name = 'llm-wiki-dsh-paths';
 
+export const Config = z.object({
+  serveUrl: z.string().pattern(/^(?:https?:\/\/.+)?$/i).default('').volatile().description({
+    en: 'HTTP(S) URL opened by the Llm-wiki entries in the left and right sidebars.',
+    fr: 'URL HTTP(S) ouverte par les entrées Llm-wiki dans les panneaux latéraux gauche et droit.',
+  }),
+});
+
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 
-export function apply(ctx) {
+export function apply(ctx, config) {
   const bridgePath = resolve(packageRoot, 'readonly-mcp.mjs');
   const connectorPath = resolve(
     process.env.LLM_WIKI_CONNECTOR ||
@@ -64,6 +72,10 @@ export function apply(ctx) {
     );
 
     register('list', async () => ({ workspaces: await listWorkspaces(defaultRoot) }));
+    register('serveUrl', async () => {
+      const value = config.serveUrl.get();
+      return { url: value ? validateServeUrl(value, 'llm-wiki Serve URL') : '' };
+    });
     register('create', async (payload) => {
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
         throw new Error('Workspace form data is required.');

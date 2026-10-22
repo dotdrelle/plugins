@@ -47,14 +47,18 @@ const productionToolNames = new Set([
 ]);
 const allowedProductionJobs = new Set(['build', 'export', 'polish']);
 
-function instructionsFor(serveUrl, workspaceSlug) {
+function instructionsFor(config) {
+  const { workspace, wiki, production, serve } = config;
+  const workspaceSlug = workspace.slug;
   const prefix = `mcp__${workspaceSlug}_wiki__`;
-  const links = serveUrl
-    ? `Trusted Serve browser base URL: ${serveUrl}. When the user needs to open a document, call workspace_document_url with the exact relative path returned by a wiki MCP tool and include the returned URL as a Markdown link. The link opens only the rendered document, without Serve navigation. Never emit a remote document path as a local relative file link.`
+  const links = serve
+    ? `Trusted Serve browser base URL for this workspace: ${serve.url}. When the user needs to open a document, call workspace_document_url with the exact relative path returned by a wiki MCP tool and include the returned URL as a Markdown link. The link opens only the rendered document, without Serve navigation. Never emit a remote document path as a local relative file link.`
     : 'No Serve browser URL is configured. You may read documents through MCP, but do not present their relative paths as clickable local files; say that opening them in Serve is not configured.';
   return [
-    'This MCP server is scoped to exactly one remote llm-wiki workspace. The workspace documents remain on the wiki server; read them through these MCP tools or open them with a trusted Serve URL configured for this workspace.',
-    `For this workspace, use its tools named ${prefix}wiki__* and ${prefix}production__*. Do not use a machine-level/global workspace selector or another wiki's tools for this workspace.`,
+    `ACTIVE HARNESS WORKSPACE BINDING: ${JSON.stringify(workspace.name)} (slug ${workspaceSlug}) is bound to the remote llm-wiki MCP endpoint ${wiki.url.href}. This URL and its locally stored bearer token are the configured workspace identity. The token is a secret: never reveal it, quote it, or include it in an answer.`,
+    `This bridge has a fixed connection to that one wiki endpoint and token; it cannot switch to another workspace. Use only this workspace's tools named ${prefix}wiki__* and ${prefix}production__*. Do not use a machine-level/global workspace selector or another wiki's tools to resolve this workspace. If the user asks to work in another wiki workspace, ask them to switch to that workspace's Harness Workspace first.`,
+    'A manager registry message saying that no workspace is selected does not change this bridge binding. Do not list or activate a manager workspace to guess the target: the configured endpoint above is the target for this Harness Workspace.',
+    production ? `The production tools for this same workspace are bound to ${production.url.href}; the separate production token is also secret and must never be revealed.` : 'No production endpoint is configured for this workspace.',
     `Use ${prefix}wiki__wiki_workspace_status to inspect templates, shared build context, and deliverables. Read template bodies with ${prefix}wiki__template_read, shared rules with ${prefix}build_context_read, and generated documents with ${prefix}wiki__wiki_read_deliverable. These tools return the remote content; local project files are only connection configuration.`,
     'Use wiki search/collection and read tools for factual evidence. Keep wiki evidence, web evidence, and attachments distinct, and cite the exact paths returned by the tools.',
     links,
@@ -138,6 +142,19 @@ async function readConfig() {
     throw new Error(`${configPath} must declare wiki.url and wiki.token.`);
   }
   const wikiUrl = endpointUrl(config.wiki.url, 'wiki.url');
+  let workspace = {
+    name: basename(resolve(process.cwd())),
+    slug: basename(resolve(process.cwd())),
+  };
+  try {
+    const metadata = JSON.parse(await readFile(resolve(process.cwd(), '.dsh/llm-wiki-workspace.json'), 'utf8'));
+    if (metadata && typeof metadata === 'object') {
+      if (typeof metadata.name === 'string' && metadata.name.trim()) workspace.name = metadata.name.trim().replace(/[\r\n\t]+/g, ' ');
+      if (typeof metadata.slug === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(metadata.slug)) workspace.slug = metadata.slug;
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw new Error(`cannot read workspace identity: ${error instanceof Error ? error.message : String(error)}`);
+  }
   const serve = config.serve === undefined || config.serve === null
     ? null
     : { url: serveBaseUrl(config.serve.url) };
@@ -152,6 +169,7 @@ async function readConfig() {
     };
   }
   return {
+    workspace,
     wiki: { url: wikiUrl, token: config.wiki.token },
     serve,
     production,
@@ -179,7 +197,7 @@ async function connectEndpoint(name, endpoint, token) {
   }
 }
 
-async function discoverTools(connection, allowlist, namespace, exposed) {
+async function discoverTools(connection, allowlist, namespace, exposed, config) {
   if (!connection.client) return;
   try {
     let cursor;
@@ -225,6 +243,8 @@ async function discoverTools(connection, allowlist, namespace, exposed) {
             };
           }
         }
+        const boundEndpoint = namespace === 'production' ? config.production?.url.href : config.wiki.url.href;
+        item.description = `Fixed workspace binding: ${config.workspace.name} (${config.workspace.slug}), ${namespace} endpoint ${boundEndpoint}. This tool can access only the workspace configured for this Harness Workspace. ${item.description ?? ''}`.trim();
         exposed.set(name, { connection, rawName: tool.name, namespace });
         connection.tools.push(name);
         exposed.set(`tool:${name}`, item);
@@ -254,18 +274,18 @@ async function main() {
   ]);
   const exposed = new Map();
   await Promise.all([
-    discoverTools(wikiConnection, wikiToolNames, 'wiki', exposed),
-    discoverTools(productionConnection, productionToolNames, 'production', exposed),
+    discoverTools(wikiConnection, wikiToolNames, 'wiki', exposed, config),
+    discoverTools(productionConnection, productionToolNames, 'production', exposed, config),
   ]);
 
   const server = new Server(
     { name: 'llm-wiki-workspace-bridge', version: '1.0.0' },
-    { capabilities: { tools: {} }, instructions: instructionsFor(config.serve?.url, basename(resolve(process.cwd())) || 'workspace') },
+    { capabilities: { tools: {} }, instructions: instructionsFor(config) },
   );
   const statusTool = {
     name: 'workspace_connection_status',
     title: 'Workspace connection status',
-    description: 'Report which configured remote wiki and production MCP services are connected, and whether a Serve document URL is configured.',
+    description: 'Report the fixed workspace binding for this Harness Workspace (name, slug, and configured wiki MCP endpoint), connection status, and whether a Serve document URL is configured. The endpoint is included; credentials are never returned.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
   };
@@ -292,6 +312,12 @@ async function main() {
           type: 'text',
           text: JSON.stringify({
             workspace: process.cwd(),
+            binding: {
+              name: config.workspace.name,
+              slug: config.workspace.slug,
+              wikiEndpoint: config.wiki.url.href,
+              productionEndpoint: config.production?.url.href ?? null,
+            },
             wiki: { status: wikiConnection.status, tools: wikiConnection.tools.length, ...(wikiConnection.error ? { error: wikiConnection.error } : {}) },
             serve: config.serve ? { status: 'configured' } : { status: 'not-configured' },
             production: { status: productionConnection.status, tools: productionConnection.tools.length, ...(productionConnection.error ? { error: productionConnection.error } : {}) },

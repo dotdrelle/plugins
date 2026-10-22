@@ -121,9 +121,19 @@ function validateEndpoint(value, label) {
   return url.toString();
 }
 
-function validateServeUrl(value, label) {
-  const url = validateEndpoint(value, label);
-  const parsed = new URL(url);
+export function validateServeUrl(value, label) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${label} must be an absolute HTTP(S) Serve URL.`);
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error(`${label} must use HTTP or HTTPS.`);
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error(`${label} must not embed credentials, query parameters, or a fragment.`);
+  }
   return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
 }
 
@@ -207,6 +217,9 @@ function workspaceFiles(workspace, directory) {
     `# ${workspace.name} — wiki distant`,
     '',
     'Ce workspace Harness est un point d’accès au workspace wiki distant.',
+    `Cible distante fixe : ${workspace.wiki.url}`,
+    'Pour les tâches wiki dans cette conversation, utilise uniquement les outils MCP de ce workspace Harness. Cette URL et le jeton stocké localement déterminent le wiki cible; ne demande pas de choisir un workspace dans le registre wiki-manager et ne bascule pas vers un autre wiki. Le jeton est un secret et ne doit jamais être affiché.',
+    'La configuration de ce profil ne change pas automatiquement le workspace Harness courant : utilise une conversation ouverte dans ce dossier pour que ses outils MCP soient actifs.',
     'Les documents, templates, règles de build et livrables restent sur le serveur; ce dossier ne contient que la configuration MCP.',
     '',
     'Outils disponibles dans Donna : lecture du wiki, du build-context, des templates et des livrables; liens cliquables vers Serve si une URL Serve est configurée; avec un endpoint production, lancement de build, export et polish.',
@@ -302,7 +315,7 @@ async function setup() {
   const name = await ask('Workspace name');
   const wikiUrl = await ask('Wiki MCP HTTPS URL');
   const wikiToken = await askSecret('Wiki read token');
-  const serveUrl = await ask('Serve HTTPS URL (or localhost URL)');
+  const serveUrl = await ask('Serve HTTP(S) URL');
   const enableProduction = /^(y|yes|oui|o)$/i.test(await ask('Enable build/export/polish actions? (y/N)', 'N'));
   const workspace = { name, wiki: { url: wikiUrl, token: wikiToken }, serve: { url: serveUrl } };
   if (enableProduction) {

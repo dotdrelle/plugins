@@ -5,16 +5,16 @@ window.__ModuleLoader__.load({
     const { createElement: h, useEffect, useState } = require('react');
 
 
-    const inject = ['slots', 'connection'];
+    const inject = ['slots', 'connection', 'layout', 'sidebarRight', 'sidebarRightTabs'];
 
     const copy = {
       en: {
         title: 'llm-wiki workspaces',
-        intro: 'Create a Harness Workspace connected to one remote wiki. Wiki files stay on the server; only private MCP settings are stored locally.',
+        intro: 'Create a dedicated Harness Workspace bound to one remote wiki. The wiki URL and read token fix the target; Donna uses that wiki only when you work in this Harness Workspace. Creating it does not switch the current conversation.',
         name: 'Workspace name',
         wikiUrl: 'Wiki MCP HTTPS URL',
         wikiToken: 'Wiki read token',
-        serveUrl: 'Serve browser URL (open wiki documents)',
+        serveUrl: 'Serve HTTP(S) browser URL (open wiki documents)',
         production: 'Enable build, export and polish actions',
         productionUrl: 'Production MCP HTTPS URL',
         productionToken: 'Production write token',
@@ -23,22 +23,47 @@ window.__ModuleLoader__.load({
         existing: 'Configured workspaces',
         empty: 'No llm-wiki workspaces yet.',
         loading: 'Loading…',
-        loader: 'Workspace MCP loader required: install @momojie-s/dsh-workspace-mcp once in this Harness profile. It scopes each wiki’s tools to its own Workspace.',
+        loader: 'Workspace MCP loader required: install @momojie-s/dsh-workspace-mcp once in this Harness profile. It scopes each wiki’s tools to its own Workspace. Open or start the conversation inside the matching Harness Workspace; do not select a wiki from the manager registry.',
         success: 'Workspace created and added to Harness.',
         readOnly: 'Read only',
         productionEnabled: 'Build/export/polish enabled',
         path: 'Folder',
         failed: 'Could not create the workspace.',
-        required: 'Enter a name, the wiki MCP URL, and its read token.',
-        serveHelp: 'Use the Serve web UI address, not the MCP URL. Local default: http://localhost:3100.',
+        required: 'Enter a name, the wiki MCP URL, its read token, and the Serve URL.',
+        serveHelp: 'This workspace URL builds document links. The llm-wiki sidebar URL is set separately in the plugin configuration. Local default: http://localhost:3100.',
+        sidebarTitle: 'Open a wiki in the right sidebar',
+        sidebarIntro: 'Opening the URL saved in the llm-wiki plugin configuration.',
+        sidebarEmpty: 'No URL is configured. Set Serve URL in the llm-wiki plugin configuration, then reopen this entry.',
+        sidebarLoading: 'Loading the configured URL…',
+        sidebarFailed: 'Could not load the configured URL.',
+        leftPanelTitle: 'Llm-wiki',
+        leftPanelIntro: 'Open the configured wiki-manager in Harness Browser. If no conversation is active, it opens in your system browser.',
+        leftPanelOpening: 'Returning to the conversation and opening wiki-manager in Harness Browser…',
+        leftPanelEmpty: 'No wiki-manager URL is configured. Set Wiki-manager Serve URL in this plugin’s configuration.',
+        leftPanelOpen: 'Open wiki-manager in browser',
+        openServe: 'Open wiki-manager',
+        opening: 'Opening…',
+        browserUnavailable: 'The Harness right-side Browser is unavailable in this profile. Enable the sidebar browser plugin and try again.',
+        sidebarDescription: 'Open the Serve URL configured for the llm-wiki plugin.',
+        configSummary: 'Choose the wiki-manager Serve page opened in the right sidebar.',
+        configLabel: 'Wiki-manager Serve URL',
+        configHelp: 'Enter the HTTP(S) address of the wiki-manager Serve interface. Leave it empty to disable the sidebar shortcut.',
+        configLoading: 'Loading plugin configuration…',
+        configUnavailable: 'This plugin configuration is not available in the current Harness profile.',
+        configReadOnly: 'This profile does not allow plugin configuration changes.',
+        configInvalidUrl: 'Enter a valid HTTP(S) URL without credentials, a query, or a fragment.',
+        configSave: 'Save',
+        configSaving: 'Saving…',
+        configSaved: 'Configuration saved.',
+        configSaveFailed: 'Could not save the plugin configuration. Check the URL and try again.',
       },
       fr: {
         title: 'Workspaces llm-wiki',
-        intro: 'Crée un Workspace Harness relié à un wiki distant. Les documents restent sur le serveur; seuls les paramètres MCP privés sont stockés localement.',
+        intro: 'Crée un Workspace Harness dédié et lié à un seul wiki distant. L’URL du wiki et son jeton de lecture fixent la cible; Donna n’utilise que ce wiki lorsque la conversation se déroule dans ce Workspace Harness. La création ne bascule pas la conversation courante.',
         name: 'Nom du workspace',
         wikiUrl: 'URL HTTPS du MCP wiki',
         wikiToken: 'Jeton de lecture du wiki',
-        serveUrl: 'URL web Serve (ouvrir les documents du wiki)',
+        serveUrl: 'URL HTTP(S) de Serve (ouvrir les documents du wiki)',
         production: 'Activer les actions build, export et polish',
         productionUrl: 'URL HTTPS du MCP de production',
         productionToken: 'Jeton d’écriture de production',
@@ -47,14 +72,39 @@ window.__ModuleLoader__.load({
         existing: 'Workspaces configurés',
         empty: 'Aucun workspace llm-wiki pour le moment.',
         loading: 'Chargement…',
-        loader: 'Chargeur MCP par workspace requis : installe @momojie-s/dsh-workspace-mcp une fois dans ce profil Harness. Il isole les outils de chaque wiki dans son Workspace.',
+        loader: 'Chargeur MCP par workspace requis : installe @momojie-s/dsh-workspace-mcp une fois dans ce profil Harness. Il isole les outils de chaque wiki dans son Workspace. Ouvre ou démarre la conversation dans le Workspace Harness correspondant; ne sélectionne pas un wiki dans le registre du manager.',
         success: 'Workspace créé et ajouté à Harness.',
         readOnly: 'Lecture seule',
         productionEnabled: 'Build/export/polish activés',
         path: 'Dossier',
         failed: 'Impossible de créer le workspace.',
-        required: 'Indique le nom, l’URL MCP du wiki et son jeton de lecture.',
-        serveHelp: 'Indique l’adresse de l’interface web Serve, pas celle du MCP. Défaut local : http://localhost:3100.',
+        required: 'Indique le nom, l’URL MCP du wiki, son jeton de lecture et l’URL Serve.',
+        serveHelp: 'Cette URL de workspace sert aux liens vers les documents. L’URL du panneau llm-wiki se règle séparément dans la configuration du plugin. Défaut local : http://localhost:3100.',
+        sidebarTitle: 'Ouvrir un wiki dans le panneau droit',
+        sidebarIntro: 'Ouvre l’adresse enregistrée dans la configuration du plugin llm-wiki.',
+        sidebarEmpty: 'Aucune URL n’est configurée. Renseigne Serve URL dans la configuration du plugin llm-wiki, puis rouvre cette entrée.',
+        sidebarLoading: 'Chargement de l’URL configurée…',
+        sidebarFailed: 'Impossible de charger l’URL configurée.',
+        leftPanelTitle: 'Llm-wiki',
+        leftPanelIntro: 'Ouvre le wiki-manager configuré dans le Browser de Harness. Sans conversation active, il s’ouvre dans le navigateur système.',
+        leftPanelOpening: 'Retour à la conversation et ouverture du wiki-manager dans le Browser de Harness…',
+        leftPanelEmpty: 'Aucune URL wiki-manager configurée. Renseigne URL Serve du wiki-manager dans la configuration du plugin.',
+        leftPanelOpen: 'Ouvrir wiki-manager dans le navigateur',
+        openServe: 'Ouvrir wiki-manager',
+        opening: 'Ouverture…',
+        browserUnavailable: 'Le navigateur latéral de Harness est indisponible dans ce profil. Active le plugin Browser du panneau latéral, puis réessaie.',
+        sidebarDescription: 'Ouvrir l’URL Serve configurée pour le plugin llm-wiki.',
+        configSummary: 'Choisir la page Serve du wiki-manager ouverte dans le panneau droit.',
+        configLabel: 'URL Serve du wiki-manager',
+        configHelp: 'Indique l’adresse HTTP(S) de l’interface Serve du wiki-manager. Laisse vide pour désactiver le raccourci latéral.',
+        configLoading: 'Chargement de la configuration du plugin…',
+        configUnavailable: 'La configuration de ce plugin est indisponible dans ce profil Harness.',
+        configReadOnly: 'Ce profil ne permet pas de modifier la configuration du plugin.',
+        configInvalidUrl: 'Indique une URL HTTP(S) valide, sans identifiants, requête ni fragment.',
+        configSave: 'Enregistrer',
+        configSaving: 'Enregistrement…',
+        configSaved: 'Configuration enregistrée.',
+        configSaveFailed: 'Impossible d’enregistrer la configuration. Vérifie l’URL et réessaie.',
       },
     };
 
@@ -78,6 +128,112 @@ window.__ModuleLoader__.load({
             color: 'var(--text-color, inherit)',
           },
         }),
+      );
+    }
+
+    function ServeUrlConfig({ view, form }) {
+      const language = (navigator.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+      const t = copy[language];
+      const snapshot = form?.state;
+      const [draft, setDraft] = useState(snapshot?.value?.serveUrl ?? '');
+      const [dirty, setDirty] = useState(false);
+      const [saving, setSaving] = useState(false);
+      const [notice, setNotice] = useState(null);
+
+      useEffect(() => {
+        if (snapshot?.status === 'ready' && !dirty) {
+          setDraft(snapshot.value?.serveUrl ?? '');
+        }
+      }, [snapshot?.revision, snapshot?.status, dirty]);
+
+      if (view === 'summary') return t.configSummary;
+      if (!snapshot || snapshot.status === 'loading') {
+        return h('p', { role: 'status', style: { opacity: 0.75 } }, t.configLoading);
+      }
+      if (snapshot.status !== 'ready') {
+        return h('p', { role: 'status', style: { opacity: 0.75 } }, t.configUnavailable);
+      }
+
+      const save = async (event) => {
+        event.preventDefault();
+        setNotice(null);
+        const url = draft.trim();
+        if (url) {
+          let parsed;
+          try {
+            parsed = new URL(url);
+          } catch {
+            setNotice({ kind: 'error', text: t.configInvalidUrl });
+            return;
+          }
+          if (!['http:', 'https:'].includes(parsed.protocol)
+            || parsed.username || parsed.password || parsed.search || parsed.hash) {
+            setNotice({ kind: 'error', text: t.configInvalidUrl });
+            return;
+          }
+        }
+
+        if (!form || typeof snapshot.revision !== 'number') {
+          setNotice({ kind: 'error', text: t.configUnavailable });
+          return;
+        }
+        setSaving(true);
+        try {
+          const accepted = await form.mutate([
+            { op: 'set', path: ['serveUrl'], value: url },
+          ], snapshot.revision);
+          if (!accepted) {
+            setNotice({ kind: 'error', text: t.configSaveFailed });
+            return;
+          }
+          setDirty(false);
+          setNotice({ kind: 'success', text: t.configSaved });
+        } catch {
+          setNotice({ kind: 'error', text: t.configSaveFailed });
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return h('form', {
+        onSubmit: save,
+        style: { display: 'grid', alignContent: 'start', gap: 14, maxWidth: 620 },
+      },
+        h('label', { style: { display: 'grid', gap: 7, fontSize: 13 } },
+          h('span', null, t.configLabel),
+          h('input', {
+            type: 'url',
+            value: draft,
+            autoComplete: 'url',
+            spellCheck: false,
+            placeholder: 'http://localhost:3100',
+            onChange: (event) => {
+              setDraft(event.currentTarget.value);
+              setDirty(true);
+              setNotice(null);
+            },
+            style: {
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '9px 10px',
+              borderRadius: 7,
+              border: '1px solid var(--border-color, #555)',
+              background: 'var(--input-background, transparent)',
+              color: 'var(--text-color, inherit)',
+            },
+          }),
+          h('span', { style: { opacity: 0.72, lineHeight: 1.5 } }, t.configHelp),
+        ),
+        h('button', {
+          type: 'submit',
+          disabled: saving || !snapshot.writable || !dirty,
+          style: { justifySelf: 'start', padding: '9px 14px', borderRadius: 7, cursor: 'pointer' },
+        }, saving ? t.configSaving : t.configSave),
+        !snapshot.writable ? h('p', { role: 'status', style: { margin: 0, opacity: 0.75 } }, t.configReadOnly) : null,
+        notice ? h('p', {
+          role: notice.kind === 'error' ? 'alert' : 'status',
+          style: { margin: 0, color: notice.kind === 'error' ? 'var(--danger-color, #d66)' : 'inherit' },
+        }, notice.text) : null,
       );
     }
 
@@ -188,6 +344,187 @@ window.__ModuleLoader__.load({
         if (!response.ok) throw new Error(response.error?.message || 'Harness rejected the workspace request.');
         return response.value;
       };
+
+      const sidebarTypeId = '@dotdrelle/dsh-llm-wiki/sidebar';
+      const panelId = 'llm-wiki';
+      const language = (navigator.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+      const t = copy[language];
+
+      const openConfiguredWiki = (url) => {
+        const mounted = ctx.sidebarRight.mounted;
+        let settled = false;
+        let timer;
+        let unsubscribe = () => {};
+        const openInSession = () => {
+          if (settled || mounted.getSnapshot() === undefined) return;
+          settled = true;
+          clearTimeout(timer);
+          unsubscribe();
+          try {
+            ctx.sidebarRight.openTab('browser', { params: { url } });
+          } catch {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }
+        };
+
+        timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          unsubscribe();
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }, 2000);
+        ctx.layout.selectPanel(null);
+        unsubscribe = mounted.subscribe(openInSession);
+        if (settled) unsubscribe();
+        else openInSession();
+      };
+
+      function WikiPanelIcon({ size = 20 }) {
+        return h('svg', {
+          width: size,
+          height: size,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.7,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+        },
+        h('path', { d: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z' }),
+        h('path', { d: 'M4 5.5v16M8 7h8M8 11h8' }));
+      }
+
+      ctx.effect(() => ctx.sidebarRightTabs.register({
+        id: sidebarTypeId,
+        kind: 'llm-wiki-workspaces',
+        title: () => 'llm-wiki',
+        guide: [{
+          id: 'open-configured-wiki',
+          order: 45,
+          title: () => 'llm-wiki',
+          description: () => t.sidebarDescription,
+        }],
+      }), 'llm-wiki right-sidebar tab type');
+
+      ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+        name: 'sidebar.right.pane.tab',
+        key: sidebarTypeId,
+      }, function WikiWorkspacePicker({ useTabInfo }) {
+        const { tab } = useTabInfo();
+        const [serveUrl, setServeUrl] = useState(null);
+        const [notice, setNotice] = useState(null);
+
+        useEffect(() => {
+          let active = true;
+          call('serveUrl').then((result) => {
+            if (!active) return;
+            const url = result.url ?? '';
+            setServeUrl(url);
+            if (!url) return;
+            try {
+              tab.actions.openTab('browser', {
+                params: { url },
+                replaceTab: true,
+              });
+            } catch (error) {
+              setNotice({ kind: 'error', text: error instanceof Error ? error.message : t.browserUnavailable });
+            }
+          }).catch((error) => {
+            if (!active) return;
+            setNotice({ kind: 'error', text: error instanceof Error ? error.message : t.sidebarFailed });
+            setServeUrl('');
+          });
+          return () => { active = false; };
+        }, []);
+
+        const openServe = () => {
+          setNotice(null);
+          try {
+            tab.actions.openTab('browser', {
+              params: { url: serveUrl },
+              replaceTab: true,
+            });
+          } catch (error) {
+            setNotice({ kind: 'error', text: error instanceof Error ? error.message : t.browserUnavailable });
+          }
+        };
+
+        return h('div', { style: { display: 'grid', alignContent: 'start', gap: 14, padding: 18 } },
+          h('section', { style: { display: 'grid', gap: 7 } },
+            h('h2', { style: { margin: 0, fontSize: 18 } }, t.sidebarTitle),
+            h('p', { style: { margin: 0, opacity: 0.8, lineHeight: 1.5 } }, t.sidebarIntro),
+          ),
+          serveUrl === null ? h('div', { role: 'status', style: { opacity: 0.75 } }, t.sidebarLoading) :
+            !serveUrl ? h('div', { style: { opacity: 0.75, lineHeight: 1.5 } }, t.sidebarEmpty) :
+              h('div', { style: { display: 'grid', gap: 10 } },
+                h('code', { style: { overflowWrap: 'anywhere', opacity: 0.75, fontSize: 12 } }, serveUrl),
+                h('button', {
+                  type: 'button',
+                  onClick: openServe,
+                  style: { justifySelf: 'start', padding: '9px 14px', borderRadius: 7, cursor: 'pointer' },
+                }, t.openServe),
+              ),
+          notice ? h('div', {
+            role: 'status',
+            style: { padding: 10, borderRadius: 7, border: '1px solid #b44', lineHeight: 1.45 },
+          }, notice.text) : null,
+        );
+      })), 'llm-wiki right-sidebar workspace picker');
+
+      ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+        name: 'sidebar.panellist',
+        id: panelId,
+        order: 25,
+        label: () => t.leftPanelTitle,
+      }, WikiPanelIcon)), 'llm-wiki left-sidebar entry');
+
+      ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({
+        name: 'main',
+        key: panelId,
+      }, function WikiManagerPanel() {
+        const [state, setState] = useState({ status: 'loading' });
+
+        useEffect(() => {
+          let active = true;
+          call('serveUrl').then((result) => {
+            if (!active) return;
+            const url = result.url ?? '';
+            if (!url) {
+              setState({ status: 'empty' });
+              return;
+            }
+            setState({ status: 'opening', url });
+            openConfiguredWiki(url);
+          }).catch((error) => {
+            if (!active) return;
+            setState({ status: 'error', message: error instanceof Error ? error.message : t.sidebarFailed });
+          });
+          return () => { active = false; };
+        }, []);
+
+        return h('div', { style: { display: 'grid', alignContent: 'start', gap: 14, padding: 20 } },
+          h('h2', { style: { margin: 0, fontSize: 20 } }, t.leftPanelTitle),
+          h('p', { style: { margin: 0, opacity: 0.8, lineHeight: 1.5 } }, t.leftPanelIntro),
+          state.status === 'loading' ? h('p', { role: 'status' }, t.sidebarLoading) : null,
+          state.status === 'opening' ? h('p', { role: 'status' }, t.leftPanelOpening) : null,
+          state.status === 'empty' ? h('p', { role: 'status' }, t.leftPanelEmpty) : null,
+          state.status === 'error' ? h('p', { role: 'alert' }, state.message) : null,
+          state.url ? h('div', { style: { display: 'grid', alignContent: 'start', gap: 10 } },
+            h('code', { style: { overflowWrap: 'anywhere', opacity: 0.65, fontSize: 12 } }, state.url),
+            h('button', {
+              type: 'button',
+              onClick: () => window.open(state.url, '_blank', 'noopener,noreferrer'),
+              style: { justifySelf: 'start', padding: '9px 14px', borderRadius: 7, cursor: 'pointer' },
+            }, t.leftPanelOpen),
+          ) : null,
+        );
+      })), 'llm-wiki left-sidebar workspace panel');
+
+      ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+        name: 'plugins.row.config',
+        key: '@dotdrelle/dsh-llm-wiki#llm-wiki-dsh-paths',
+      }, ServeUrlConfig));
 
       ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
         name: 'settings.plugins.tab',

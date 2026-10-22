@@ -21,9 +21,18 @@ endpoints over HTTPS, one wiki per local Harness workspace.
 - A workspace-scoped MCP bridge that reads the wiki and production endpoints
   through Streamable HTTP. It exposes allow-listed wiki reads and only
   `build`, `export`, and `polish` production jobs.
+- Each generated Harness Workspace is bound to the exact wiki MCP URL and
+  read token entered for it. The bridge passes the workspace name, slug, and
+  endpoint to Donna as MCP instructions and on its tools; it never exposes the
+  token. Donna is told not to choose a workspace from the manager registry.
 - A configured Serve base URL, used to turn MCP-returned document paths into
   browser links. It is the web UI URL, not the wiki MCP URL; local installs
   commonly use `http://localhost:3100`, while wiki MCP commonly uses port `3101`.
+- A plugin-level Serve URL setting and **Llm-wiki** entries in the left panel
+  list and the right-Sidebar guide. With a conversation active, selecting the
+  left entry opens that URL in Harness's right-Sidebar Browser; without one, it
+  opens the URL in the system browser. The right-Sidebar guide opens it in the
+  Harness Browser.
 - Per workspace, the bridge selects a `.wikirc` profile that accepts the
   manager-issued MCP credential. It reports and skips a workspace when no
   profile accepts that credential or the workspace has not been initialized.
@@ -66,9 +75,14 @@ parameter to open the regular Serve page. Never make a remote document a local
 relative file link.
 
 The machine-level stdio connection remains read-only and retains its current
-single-active-workspace behavior. Use generated workspace folders for remote
-wiki projects: their MCP tools are agent-scoped to the Harness workspace, so a
-Juno session and another wiki session do not share a mutable active selection.
+single-active-workspace behavior. In Harness, its manager-wide workspace list
+and selection controls are hidden and refused; its generic read tools are
+marked as local-only and are not bound to a generated URL/token profile. Use
+generated workspace folders for remote wiki projects: their MCP tools are
+agent-scoped to the Harness workspace, so a Juno session and another wiki
+session do not share a mutable active selection. If those scoped tools are
+missing, open the conversation in the matching Harness Workspace instead of
+selecting a target from the manager registry.
 The scoped bridge enables only `build`, `export`, and `polish` from the
 production server. Harness's normal tool permission flow remains responsible
 for confirming a requested production action. These direct Harness jobs do not
@@ -88,7 +102,11 @@ Harness Workspaces group sessions by local directory. This helper creates that
 local directory as a small connection profile; it does not mirror the wiki.
 Donna reads context, templates, and deliverables from MCP, and starts
 production jobs against the corresponding remote workspace. Desktop and CLI use
-the same validation and private profile format.
+the same validation and private profile format. The wiki URL and token pair
+fix the remote target for that local Harness Workspace. Creating a profile
+does not switch the current conversation: open the conversation in the matching
+Harness Workspace to activate its scoped MCP tools. A manager registry message
+about an unselected workspace does not change the bridge's binding.
 
 The per-workspace loader is a separate Harness plugin. Install
 `github:Momojie-S/dsh-workspace-mcp` in the same Desktop profile (Plugins → Add
@@ -103,7 +121,9 @@ Open **Settings → Built-in plugin settings → llm-wiki**. Enter the workspace
 name, remote wiki MCP URL, read token, and Serve browser URL. The Serve URL opens
 documents in the server's web UI; it is different from the MCP endpoint. The
 form creates the local folder and
-registers it in Harness Workspaces. Enable production only when you have a
+registers it in Harness Workspaces; it does not switch the current session to
+that workspace. Use a conversation opened under the new Harness Workspace.
+Enable production only when you have a
 separate production MCP URL and write token; otherwise the workspace remains
 read-only. Tokens are sent to the authenticated Harness Host and stored in
 owner-only files, outside Donna's model context.
@@ -112,6 +132,19 @@ If the `llm-wiki` tab is missing, use Plugins → Refresh, then reload Harness
 Desktop; the plugin must be enabled. The form creates and registers the
 workspace, but its MCP tools still require the one-time per-workspace loader
 described above.
+
+Set the page address under **Plugins → @dotdrelle/dsh-llm-wiki → Configure** on
+the `llm-wiki-dsh-paths` component. Select **Llm-wiki** in the left sidebar to
+open that address in Harness's right-side Browser when a conversation is
+active, or in the system browser when no conversation is active. The right
+Sidebar's **llm-wiki** entry opens the same configured address in Harness
+Browser. The Serve URL on each
+workspace form remains available for workspace-specific document links; it does
+not control these entries.
+Desktop enables the Sidebar Browser by default. In a Harness Web profile, enable
+`ui-sidebar-browser` in that profile. The plugin setting accepts HTTP or HTTPS;
+Harness Browser may refuse sites that block embedding, and HTTPS is recommended
+for remote servers.
 
 ### CLI
 
@@ -154,7 +187,8 @@ outside the wiki and source repositories, for example `~/juno-harness.json`:
 
 Use the actual HTTPS URLs and scoped tokens issued by the server/proxy. The
 Serve URL is the browser-facing wiki UI; it may share a proxy host but use a
-different path from `/mcp`. For a local Compose stack, the default is
+different path from `/mcp`. Serve accepts HTTP or HTTPS; use HTTPS for a remote
+server. For a local Compose stack, the default is
 `http://localhost:3100`; the wiki MCP endpoint is normally port `3101`.
 The production block is optional; without it the workspace is wiki-read-only. Then
 create the Harness project directory:
@@ -193,6 +227,8 @@ before expecting that tool on a remote server; older servers will omit it.
 - A `wiki-manager` installation with at least one initialized workspace.
 - DeepSeek Harness with the `@deepseek-ai/dsh-mcp-client` plugin available in
   its installation.
+- The Harness right-Sidebar Browser for opening Serve pages beside a
+  conversation (enabled by default in Desktop; enable it for Web profiles).
 
 By default, this package expects the Claude connector at
 `../claude-desktop/bin/llm-wiki-connect.mjs`. Set `LLM_WIKI_CONNECTOR` when the

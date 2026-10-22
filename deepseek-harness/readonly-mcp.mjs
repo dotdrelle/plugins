@@ -46,8 +46,9 @@ const readOnlyToolNames = new Set([
 ]);
 
 const instructions = [
-  'This llm-wiki connection is read-only. Only the listed read tools and workspace selection controls are available. Other tools are denied by the bridge even if called directly. When a workspace-specific <slug>_wiki MCP server is present, use that server as the source for the project wiki; use this local connection only when the user explicitly asks about the local workspace.',
-  'Tool names are prefixed with mcp__llm_wiki__. For ordinary questions, call mcp__llm_wiki__wiki_workspace_current; list/select a workspace only if the requested one is not active or the user asks to choose. Do not call wiki_workspace_status for ordinary Q&A.',
+  'This llm-wiki machine-level connection is read-only and is not bound to the URL/token configured in a generated Harness Workspace. For any project wiki configured with that URL/token, you MUST use its workspace-specific <slug>_wiki MCP server. Never use this machine-level connection to choose or infer that target from the wiki-manager registry.',
+  'If the matching workspace-specific MCP tools are not present, the conversation is outside that configured Harness Workspace or its loader is unavailable. Tell the user to open the conversation in the generated Harness Workspace or install/enable the per-workspace loader. Do not fall back to wiki_workspace_list, wiki_workspace_select, or generic mcp__llm_wiki__ wiki tools, because they can target a different workspace.',
+  'Tool names on this machine-level connection are prefixed with mcp__llm_wiki__. Use it only when the user explicitly asks about a local wiki workspace and the request is not tied to a generated URL/token workspace. Do not call wiki_workspace_status for ordinary Q&A.',
   'For synthesis, architecture, audit, comparison, or functional analysis, start with one wiki_collect_context pass using maxResults=3 and maxPageChars=6000; these are starting budgets, not a completeness guarantee. For one narrow fact, use maxResults=1 or 2. Do not start with wiki_search_context. Use targeted search only if collection coverage is incomplete or the user asks you to establish whether something is absent; expand the search if its result is still incomplete.',
   'For wiki discovery and reading, use the llm-wiki MCP tools. If you need a relevant folder inventory beyond the collection results, use wiki_list_pages with the narrowest useful path filter; do not use Harness shell, glob, or general filesystem tools to inspect the wiki, and do not enumerate the whole corpus.',
   'Evidence shape: wiki_collect_context.readPages are the only opened page evidence. candidateResults are wiki-page previews for path selection, not opened evidence. sourceCandidates and notReadRawSources are path-only unread leads; never infer or quote their content. Open the matching source before using it. Keep read wiki pages, archived originals, attachments, and web results as distinct sources.',
@@ -66,6 +67,7 @@ function idKey(id) {
 }
 
 function toolRefusal(id, name) {
+  const workspaceControl = workspaceControls.has(name);
   writeMessage({
     jsonrpc: '2.0',
     id,
@@ -73,7 +75,9 @@ function toolRefusal(id, name) {
       isError: true,
       content: [{
         type: 'text',
-        text: `Tool refused: ${String(name || '(missing name)')} is not available in this read-only llm-wiki connection. Use its listed read tools; it cannot perform wiki changes.`,
+        text: workspaceControl
+          ? 'Tool refused: manager-wide workspace listing and selection are disabled in this Harness bridge. Open the generated Harness Workspace bound to the desired wiki URL/token and use its workspace-specific MCP tools.'
+          : `Tool refused: ${String(name || '(missing name)')} is not available in this read-only llm-wiki connection. Use its listed read tools; it cannot perform wiki changes.`,
       }],
     },
   });
@@ -137,11 +141,10 @@ childOutput.on('line', (line) => {
     pendingMethods.delete(key);
 
     if (method === 'initialize' && message.result) {
-      const existing = message.result.instructions?.replaceAll(
-        'wiki_workspace_select',
-        'mcp__llm_wiki__wiki_workspace_select',
-      );
-      message.result.instructions = [existing, instructions].filter(Boolean).join('\n\n');
+      // The local connector's built-in prompt recommends selecting a manager
+      // workspace. That conflicts with URL/token-scoped Harness workspaces, so
+      // replace it completely with this bridge's scope policy.
+      message.result.instructions = instructions;
       message.result.serverInfo = {
         ...message.result.serverInfo,
         name: 'llm-wiki-harness-readonly',
@@ -154,10 +157,7 @@ childOutput.on('line', (line) => {
       const hiddenTools = [];
       for (const tool of message.result.tools) {
         if (workspaceControls.has(tool.name)) {
-          controls.push({
-            ...tool,
-            annotations: { ...tool.annotations, readOnlyHint: true },
-          });
+          hiddenTools.push(tool.name);
           continue;
         }
         if (
@@ -194,7 +194,11 @@ childOutput.on('line', (line) => {
       }
       advertisedReadTools.clear();
       for (const tool of readTools) advertisedReadTools.add(tool.name);
-      message.result.tools = [...controls, ...readTools];
+      const localOnlyReadTools = readTools.map((tool) => ({
+        ...tool,
+        description: `Machine-level connection; not bound to a generated Harness Workspace URL/token. Use only when the user explicitly asks about a local manager workspace. For a configured remote workspace, use its matching workspace-specific MCP server instead. ${tool.description ?? ''}`.trim(),
+      }));
+      message.result.tools = [...controls, ...localOnlyReadTools];
       const visibleCount = controls.length + readTools.length;
       const hiddenPreview = hiddenTools.slice(0, 12).join(', ');
       const hiddenSuffix = hiddenTools.length > 12 ? `, and ${hiddenTools.length - 12} more` : '';
@@ -246,7 +250,7 @@ input.on('line', (line) => {
     const name = message.params?.name;
     const control = workspaceControls.has(name);
     const readOnly = readOnlyToolNames.has(name) && advertisedReadTools.has(name);
-    if (!control && !readOnly) {
+    if (control || !readOnly) {
       toolRefusal(message.id, name);
       return;
     }
