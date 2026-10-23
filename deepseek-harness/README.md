@@ -1,13 +1,13 @@
 # llm-wiki for DeepSeek Harness
 
-This Cordis bundle connects DeepSeek Harness to llm-wiki. The existing
-machine-level connection uses the `../claude-desktop` connector over MCP stdio;
-generated Harness Workspaces can connect to remote wiki and production MCP
-endpoints over HTTPS, one wiki per local Harness workspace.
+This Cordis bundle connects DeepSeek Harness to llm-wiki. Generated Harness
+Workspaces connect to remote wiki and production MCP endpoints over HTTPS, one
+wiki per local Harness workspace. An optional machine-level read-only
+connection can reuse the `../claude-desktop` connector over MCP stdio.
 
 ## What it provides
 
-- Workspace discovery and selection through the existing connector.
+- Optional local manager workspace discovery through the existing connector.
 - Wiki search, evidence collection, page and source reading, graph queries,
   provenance lookup, product help, and other explicitly allow-listed read tools.
 - Instructions telling Harness to ground answers in pages it actually read and
@@ -108,7 +108,8 @@ does not switch the current conversation: open the conversation in the matching
 Harness Workspace to activate its scoped MCP tools. A manager registry message
 about an unselected workspace does not change the bridge's binding.
 
-The per-workspace loader is a separate Harness plugin. Install
+To use generated remote workspaces, install a second Harness plugin: the
+per-workspace loader. Install
 `github:Momojie-S/dsh-workspace-mcp` in the same Desktop profile (Plugins → Add
 plugin → install third-party plugin). It reads each project's
 `.dsh/mcp.servers.yml` and scopes the tools to that workspace's agent. Review
@@ -221,25 +222,85 @@ before expecting that tool on a remote server; older servers will omit it.
 
 ## Requirements
 
-- A Node.js executable available as `node`, or `LLM_WIKI_NODE` set to its
-  absolute path.
-- The `plugins/claude-desktop` connector and a built `llm-wiki` engine.
-- A `wiki-manager` installation with at least one initialized workspace.
+- Node.js 24 or newer available as `node`, or `LLM_WIKI_NODE` set to its
+  absolute path. This is required by the per-workspace loader.
 - DeepSeek Harness with the `@deepseek-ai/dsh-mcp-client` plugin available in
   its installation.
+- The per-workspace MCP loader, installed in the same Harness profile.
 - The Harness right-Sidebar Browser for opening Serve pages beside a
   conversation (enabled by default in Desktop; enable it for Web profiles).
 
-By default, this package expects the Claude connector at
-`../claude-desktop/bin/llm-wiki-connect.mjs`. Set `LLM_WIKI_CONNECTOR` when the
-connector is installed elsewhere. The connector also supports
-`WIKI_MANAGER_STATE_DIR`, `LLM_WIKI_ENGINE_HOME`, and `LLM_WIKI_ENTRYPOINT` for
-non-standard installations.
+For a remote wiki, the local Claude connector, wiki engine, and wiki-manager
+installation are not required. If the connector is absent, the machine-level
+MCP bridge reports that it is unavailable and exposes no tools; the
+workspace-specific remote connection continues to work. To enable local
+manager workspaces, set `LLM_WIKI_CONNECTOR` to the connector file and configure
+`WIKI_MANAGER_STATE_DIR` plus `LLM_WIKI_ENGINE_HOME` (the directory containing
+`dist/bin/wiki.js`) or `LLM_WIKI_ENTRYPOINT` (the entrypoint file itself).
+
+## One-command setup on Ubuntu
+
+This installs the llm-wiki bundle and the per-workspace loader into one Harness
+profile, then creates the local Harness Workspace folder connected to a remote
+wiki. It assumes DeepSeek Harness CLI is already installed and a wiki MCP URL
+and read token have been issued by the server.
+
+From a clone of `https://github.com/dotdrelle/plugins`, run:
+
+```bash
+./install-deepseek.sh
+```
+
+Open Harness once first, then quit it when the script asks. The script creates
+or updates the `desktop` profile under `~/.dsh`, installs both plugins, and
+prompts for the remote wiki URL, token, and Serve URL. It writes the workspace
+connection files under `~/DeepSeek Harness Workspaces/llm-wiki` with private
+permissions. If pnpm asks permission to run the per-workspace loader's build
+script, allow it for this install. For a separate CLI/Web profile, use the
+manual profile-specific commands below.
+
+The final prompt prints the new workspace folder. Add it once in Harness
+Desktop with **Add workspace** to use the wiki from a conversation. The folder
+contains connection settings, not wiki documents. This installer connects to
+an existing wiki server; it does not deploy the wiki engine or manager.
 
 ## Install in Harness Desktop
 
 The Desktop app owns its `desktop` profile; a regular terminal may not have the
 `dsh` command, and the app's profile should be managed from the app itself.
+
+This repository contains multiple plugins, so a Git URL must select the
+`deepseek-harness/` package directory. In the Plugins page, use:
+
+```text
+git+https://github.com/dotdrelle/plugins.git#main&path:/deepseek-harness
+```
+
+The DSH bundle manifest is the `package.json` inside that directory. It declares
+`dsh.bundle.patch`; no separate `plugin.json` is required. Installing the Git
+URL lets Harness install the dependencies declared by that package.
+
+For a local clone, install the package dependencies before linking the
+directory into a Harness profile. DSH links a local checkout and uses that
+checkout's own `node_modules`; it does not install those dependencies into the
+clone for you:
+
+From the root of the cloned `plugins` repository:
+
+```bash
+cd deepseek-harness
+pnpm install
+```
+
+Then install or refresh the local directory in Harness Plugins. This step is
+what makes imports such as `@deepseek-ai/schemastery` available. The bundle's
+own dependencies are separate from the additional per-workspace loader below.
+
+The same Git subdirectory target can be used from the CLI for another profile:
+
+```bash
+dsh plugin --profile web add 'git+https://github.com/dotdrelle/plugins.git#main&path:/deepseek-harness'
+```
 
 1. Open **Plugins** in the Harness Desktop sidebar.
 2. Choose **Add plugin** → **Install a third-party plugin**.

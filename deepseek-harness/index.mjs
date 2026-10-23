@@ -26,12 +26,6 @@ export function apply(ctx, config) {
   if (!existsSync(bridgePath)) {
     throw new Error(`llm-wiki Harness bridge not found: ${bridgePath}`);
   }
-  if (!existsSync(connectorPath)) {
-    throw new Error(
-      `llm-wiki connector not found: ${connectorPath}. Set LLM_WIKI_CONNECTOR to plugins/claude-desktop/bin/llm-wiki-connect.mjs.`,
-    );
-  }
-
   ctx.provide('llmWikiDshPaths', { bridgePath, connectorPath });
 
   ctx.inject(['connection', 'workspaceRegistry'], (workspaceCtx) => {

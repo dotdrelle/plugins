@@ -84,11 +84,45 @@ function toolRefusal(id, name) {
 }
 
 if (!existsSync(connectorPath)) {
-  console.error(
-    `llm-wiki Harness bridge: connector not found at ${connectorPath}. Set LLM_WIKI_CONNECTOR to plugins/claude-desktop/bin/llm-wiki-connect.mjs.`,
-  );
-  process.exit(1);
-}
+  console.error('llm-wiki Harness bridge: local connector unavailable; remote workspace MCP connections remain available. Set LLM_WIKI_CONNECTOR to enable the local manager connection.');
+  const input = createInterface({ input: process.stdin });
+  input.on('line', (line) => {
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch (error) {
+      console.error(`llm-wiki Harness bridge: invalid MCP request (${error.message})`);
+      return;
+    }
+    if (message.id === undefined) return;
+
+    if (message.method === 'initialize') {
+      writeMessage({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          protocolVersion: message.params?.protocolVersion || '2024-11-05',
+          capabilities: { tools: { listChanged: false } },
+          serverInfo: { name: 'llm-wiki-harness-readonly', version: '0.1.4' },
+          instructions: 'The local wiki-manager connector is not configured. For a remote wiki, open the matching generated Harness Workspace and use its workspace-specific MCP tools.',
+        },
+      });
+    } else if (message.method === 'tools/list') {
+      writeMessage({ jsonrpc: '2.0', id: message.id, result: { tools: [] } });
+    } else if (message.method === 'ping') {
+      writeMessage({ jsonrpc: '2.0', id: message.id, result: {} });
+    } else {
+      writeMessage({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: { code: -32601, message: `Unsupported MCP method: ${message.method}` },
+      });
+    }
+  });
+  input.on('close', () => process.exit(0));
+  process.on('SIGINT', () => process.exit(0));
+  process.on('SIGTERM', () => process.exit(0));
+} else {
 
 const child = spawn(process.execPath, [connectorPath, 'multi-mcp'], {
   cwd: packageRoot,
@@ -266,3 +300,4 @@ input.on('close', () => {
 
 process.on('SIGINT', () => stopChild('SIGINT'));
 process.on('SIGTERM', () => stopChild('SIGTERM'));
+}
