@@ -5,6 +5,12 @@ Workspaces connect to remote wiki and production MCP endpoints over HTTPS, one
 wiki per local Harness workspace. An optional machine-level read-only
 connection can reuse the `../claude-desktop` connector over MCP stdio.
 
+**Donna Harness** is DeepSeek Harness running this bundle, so Donna answers from
+the wiki inside Harness. A separate brand bundle can replace the Harness mark
+in the sidebar with the Donna one: a hexagon, the Donna wordmark and a
+**HARNESS** pill. That brand bundle is not part of this repository, and the
+llm-wiki integration works without it.
+
 ## What it provides
 
 - Optional local manager workspace discovery through the existing connector.
@@ -79,8 +85,8 @@ single-active-workspace behavior. In Harness, its manager-wide workspace list
 and selection controls are hidden and refused; its generic read tools are
 marked as local-only and are not bound to a generated URL/token profile. Use
 generated workspace folders for remote wiki projects: their MCP tools are
-agent-scoped to the Harness workspace, so a Juno session and another wiki
-session do not share a mutable active selection. If those scoped tools are
+agent-scoped to the Harness workspace, so sessions on two different wikis do
+not share a mutable active selection. If those scoped tools are
 missing, open the conversation in the matching Harness Workspace instead of
 selecting a target from the manager registry.
 The scoped bridge enables only `build`, `export`, and `polish` from the
@@ -118,14 +124,31 @@ code.
 
 ### Harness Desktop
 
-Open **Settings → Built-in plugin settings → llm-wiki**. Enter the workspace
-name, remote wiki MCP URL, read token, and Serve browser URL. The Serve URL opens
-documents in the server's web UI; it is different from the MCP endpoint. The
-form creates the local folder and
+Once the plugin is enabled, Harness shows two entry points:
+
+- **Llm-wiki** in the left sidebar, below Plugins, Automation tasks and Inbox.
+  It opens the configured Serve page (see below).
+- An **llm-wiki** tab in **Settings → Built-in plugins**, next to **Plugin
+  list**. It holds the **llm-wiki workspaces** form.
+
+The form asks for four fields:
+
+| Field | Value |
+| --- | --- |
+| **Workspace name** | The label of the Harness Workspace. |
+| **Wiki MCP HTTPS URL** | The remote wiki MCP endpoint. |
+| **Wiki read token** | The read token issued for that endpoint. |
+| **Serve HTTP(S) browser URL (open wiki documents)** | The wiki web UI, used to build document links. Local default: `http://localhost:3100`. |
+
+All four fields are required. The Serve URL opens documents in the server's web
+UI and is different from the MCP endpoint. It also differs from the sidebar
+URL, which is set in the plugin configuration (below). The form creates the
+local folder and
 registers it in Harness Workspaces; it does not switch the current session to
 that workspace. Use a conversation opened under the new Harness Workspace.
-Enable production only when you have a
-separate production MCP URL and write token; otherwise the workspace remains
+Tick **Enable build, export and polish actions** only when you have a
+separate production MCP URL and write token (the **Production MCP HTTPS URL**
+and **Production write token** fields); otherwise the workspace remains
 read-only. Tokens are sent to the authenticated Harness Host and stored in
 owner-only files, outside Donna's model context.
 
@@ -167,20 +190,20 @@ node plugins/deepseek-harness/workspace.mjs list
 ### Advanced / batch setup
 
 For automation or several workspaces at once, create a private JSON file
-outside the wiki and source repositories, for example `~/juno-harness.json`:
+outside the wiki and source repositories, for example `~/my-wiki-harness.json`:
 
 ```json
 {
-  "name": "Juno",
+  "name": "My wiki",
   "wiki": {
-    "url": "https://wiki-proxy.example/juno/mcp",
+    "url": "https://wiki-proxy.example/my-wiki/mcp",
     "token": "<workspace read token>"
   },
   "serve": {
-    "url": "https://wiki-proxy.example/juno"
+    "url": "https://wiki-proxy.example/my-wiki"
   },
   "production": {
-    "url": "https://wiki-proxy.example/juno/production/mcp/",
+    "url": "https://wiki-proxy.example/my-wiki/production/mcp/",
     "token": "<workspace production write token>"
   }
 }
@@ -195,7 +218,7 @@ The production block is optional; without it the workspace is wiki-read-only. Th
 create the Harness project directory:
 
 ```bash
-node plugins/deepseek-harness/workspace.mjs create --config ~/juno-harness.json
+node plugins/deepseek-harness/workspace.mjs create --config ~/my-wiki-harness.json
 ```
 
 For several workspaces, pass `{"workspaces": [ ... ]}` in the private JSON
@@ -305,7 +328,7 @@ dsh plugin --profile web add 'git+https://github.com/dotdrelle/plugins.git#main&
 1. Open **Plugins** in the Harness Desktop sidebar.
 2. Choose **Add plugin** → **Install a third-party plugin**.
 3. Enter the absolute path to this directory, for example:
-   `/Users/dotdrelle/Developpement/wikiLLM/plugins/deepseek-harness`.
+   `/path/to/plugins/deepseek-harness`.
 4. Choose **Install**, then **Enable now** when installation finishes.
 5. Restart Harness if the plugin manager says a restart is required.
 

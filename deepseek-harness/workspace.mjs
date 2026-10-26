@@ -20,9 +20,9 @@ Usage:
   node workspace.mjs list [--root <directory>]
 
 Config JSON (one workspace or {"workspaces": [...]}):
-  {"name":"Juno","wiki":{"url":"https://proxy.example/juno/mcp","token":"read-token"},
-   "serve":{"url":"https://proxy.example/juno/serve"},
-   "production":{"url":"https://proxy.example/juno/production/mcp/","token":"write-token"}}
+  {"name":"My wiki","wiki":{"url":"https://proxy.example/my-wiki/mcp","token":"read-token"},
+   "serve":{"url":"https://proxy.example/my-wiki/serve"},
+   "production":{"url":"https://proxy.example/my-wiki/production/mcp/","token":"write-token"}}
 
 Omit production when this workspace should be wiki-read-only. Documents are not
 copied locally; the workspace stores MCP connection settings only.
