@@ -103,7 +103,7 @@ if (!existsSync(connectorPath)) {
         result: {
           protocolVersion: message.params?.protocolVersion || '2024-11-05',
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'llm-wiki-harness-readonly', version: '0.1.5' },
+          serverInfo: { name: 'llm-wiki-harness-readonly', version: '0.1.6' },
           instructions: 'The local wiki-manager connector is not configured. For a remote wiki, open the matching generated Harness Workspace and use its workspace-specific MCP tools.',
         },
       });

@@ -61,7 +61,7 @@ function instructionsFor(config) {
     production ? `The production tools for this same workspace are bound to ${production.url.href}; the separate production token is also secret and must never be revealed.` : 'No production endpoint is configured for this workspace.',
     `Use ${prefix}wiki__wiki_workspace_status to inspect templates, shared build context, and deliverables. Read template bodies with ${prefix}wiki__template_read, shared rules with ${prefix}build_context_read, and generated documents with ${prefix}wiki__wiki_read_deliverable. These tools return the remote content; local project files are only connection configuration.`,
     'Use wiki search/collection and read tools for factual evidence. Keep wiki evidence, web evidence, and attachments distinct, and cite the exact paths returned by the tools.',
-    'For a visual knowledge graph, use wiki_graph_view for its structured nodes and edges. This Harness bridge removes its SVG image block because Harness accepts raster images only; that is not a wiki or network failure. Use workspace_graph_url with the relevant concept, tag, or search phrase and include its link so the user can open the interactive Serve graph. Do not claim the graph endpoint failed or redraw the graph from memory.',
+    'For a visual knowledge graph, use wiki_graph_view focused on the relevant node, concept, or tag. The graph can contain citation, produces, wiki_link, shared_subject, and shared_tag edges; preserve every returned edge type in your analysis. This Harness bridge removes the unsupported SVG image and compacts (but does not filter) the structured graph data. Do not generate an SVG, Mermaid diagram, or a long inline edge list in your answer: Harness may truncate that output as “content discarded”. Instead call workspace_graph_url with the user’s search phrase and include the link to the interactive Serve graph, followed by a concise summary of the returned relations. If graph data says truncated=true, say that the graph view is partial and use wiki_graph_query for the missing focused relations.',
     links,
     `Production tools are restricted by this bridge to build, export, and polish. When the user requests one, use ${prefix}production__production_start_job if production is connected; do not claim this workspace lacks build/export tools based only on the global read-only connection. Then use ${prefix}production__production_job_status and ${prefix}production__production_job_logs to report the result; never claim success from a queued job alone.`,
     `If ${prefix}workspace_connection_status reports a disconnected service, report which service is disconnected and do not substitute another wiki or use local filesystem tools to read remote documents.`,
@@ -255,7 +255,7 @@ async function discoverTools(connection, allowlist, namespace, exposed, config) 
             };
           }
         } else if (namespace === 'wiki' && tool.name === 'wiki_graph_view') {
-          item.description = `${tool.description ?? ''} In DeepSeek Harness, the bridge keeps the structured nodes and edges but removes the SVG image block because Harness does not accept SVG as MCP image input. Use workspace_graph_url to give the user a link to the interactive Serve graph; this is an image-format limitation, not a failed graph request.`.trim();
+          item.description = `${tool.description ?? ''} In DeepSeek Harness, the bridge keeps and compacts all structured nodes and edges, including every edge type, but removes the unsupported SVG image block. Do not recreate the SVG inline; use workspace_graph_url to link to the interactive Serve graph. This is an image-format limitation, not a failed graph request.`.trim();
         }
         const boundEndpoint = namespace === 'production' ? config.production?.url.href : config.wiki.url.href;
         item.description = `Fixed workspace binding: ${config.workspace.name} (${config.workspace.slug}), ${namespace} endpoint ${boundEndpoint}. This tool can access only the workspace configured for this Harness Workspace. ${item.description ?? ''}`.trim();
@@ -385,10 +385,21 @@ async function main() {
           const selector = args.concept ?? args.tag ?? (args.node ? basename(String(args.node), '.md') : '');
           let link = '';
           try { link = graphUrl(String(selector), config.serve?.url); } catch {}
-          const content = result.content.filter((block) => !(block?.type === 'image' && block.mimeType === 'image/svg+xml'));
+          const content = result.content.flatMap((block) => {
+            if (block?.type === 'image' && block.mimeType === 'image/svg+xml') return [];
+            if (block?.type === 'text' && typeof block.text === 'string') {
+              try {
+                const graph = JSON.parse(block.text);
+                if (Array.isArray(graph.nodes) && Array.isArray(graph.edges)) {
+                  return [{ ...block, text: JSON.stringify(graph) }];
+                }
+              } catch {}
+            }
+            return [block];
+          });
           content.push({
             type: 'text',
-            text: `Harness cannot display the SVG image returned with this graph. The structured graph data above is valid.${link ? ` Open the interactive graph in Serve: ${link}` : ' No Serve URL is configured; ask the user to configure one to open the interactive graph.'}`,
+            text: `Harness cannot display the SVG image returned with this graph. The complete structured nodes and edges above are valid; all edge types are preserved.${link ? ` Open the interactive graph in Serve: ${link}` : ' No Serve URL is configured; ask the user to configure one to open the interactive graph.'}`,
           });
           return { ...result, content };
         }

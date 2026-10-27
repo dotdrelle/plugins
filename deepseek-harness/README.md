@@ -36,9 +36,11 @@ llm-wiki integration works without it.
   commonly use `http://localhost:3100`, while wiki MCP commonly uses port `3101`.
 - Harness-compatible graph handling: the engine's graph tool returns an SVG,
   which Harness cannot consume as an image. The workspace bridge keeps the
-  structured graph result, explains this format limitation, and supplies a
-  link to Serve's interactive graph; `workspace_graph_url` can prefill its
-  search with a concept, tag, or phrase.
+  complete structured graph result (all edge types, compacted), explains this
+  format limitation, and supplies a link to Serve's interactive graph. Donna
+  is instructed to link to Serve instead of emitting an inline SVG that Harness
+  can truncate; `workspace_graph_url` can prefill its search with a concept,
+  tag, or phrase.
 - A plugin-level Serve URL setting and **Llm-wiki** entries in the left panel
   list and the right-Sidebar guide. With a conversation active, selecting the
   left entry opens that URL in Harness's right-Sidebar Browser; without one, it
