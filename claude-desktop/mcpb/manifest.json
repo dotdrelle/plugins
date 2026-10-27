@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "llm-wiki-claude",
   "display_name": "llm-wiki Claude",
-  "version": "0.16.64",
+  "version": "0.16.65",
   "description": "Connect Claude Desktop to local llm-wiki workspaces.",
   "long_description": "Discover and use registered llm-wiki workspaces from Claude Desktop. The connection is local, uses MCP over stdio, keeps one active workspace per session, and does not require ShellUI or the web server.",
   "author": {
