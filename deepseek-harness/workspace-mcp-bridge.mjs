@@ -56,11 +56,12 @@ function instructionsFor(config) {
     : 'No Serve browser URL is configured. You may read documents through MCP, but do not present their relative paths as clickable local files; say that opening them in Serve is not configured.';
   return [
     `ACTIVE HARNESS WORKSPACE BINDING: ${JSON.stringify(workspace.name)} (slug ${workspaceSlug}) is bound to the remote llm-wiki MCP endpoint ${wiki.url.href}. This URL and its locally stored bearer token are the configured workspace identity. The token is a secret: never reveal it, quote it, or include it in an answer.`,
-    `This bridge has a fixed connection to that one wiki endpoint and token; it cannot switch to another workspace. Use only this workspace's tools named ${prefix}wiki__* and ${prefix}production__*. Do not use a machine-level/global workspace selector or another wiki's tools to resolve this workspace. If the user asks to work in another wiki workspace, ask them to switch to that workspace's Harness Workspace first.`,
+    `This bridge has a fixed connection to that one wiki endpoint and token; it cannot switch to another workspace. Use only this workspace's tools named ${prefix}wiki__* and ${prefix}production__*, plus workspace_connection_status, workspace_document_url, and workspace_graph_url. Do not use a machine-level/global workspace selector or another wiki's tools to resolve this workspace. If the user asks to work in another wiki workspace, ask them to switch to that workspace's Harness Workspace first.`,
     'A manager registry message saying that no workspace is selected does not change this bridge binding. Do not list or activate a manager workspace to guess the target: the configured endpoint above is the target for this Harness Workspace.',
     production ? `The production tools for this same workspace are bound to ${production.url.href}; the separate production token is also secret and must never be revealed.` : 'No production endpoint is configured for this workspace.',
     `Use ${prefix}wiki__wiki_workspace_status to inspect templates, shared build context, and deliverables. Read template bodies with ${prefix}wiki__template_read, shared rules with ${prefix}build_context_read, and generated documents with ${prefix}wiki__wiki_read_deliverable. These tools return the remote content; local project files are only connection configuration.`,
     'Use wiki search/collection and read tools for factual evidence. Keep wiki evidence, web evidence, and attachments distinct, and cite the exact paths returned by the tools.',
+    'For a visual knowledge graph, use wiki_graph_view for its structured nodes and edges. This Harness bridge removes its SVG image block because Harness accepts raster images only; that is not a wiki or network failure. Use workspace_graph_url with the relevant concept, tag, or search phrase and include its link so the user can open the interactive Serve graph. Do not claim the graph endpoint failed or redraw the graph from memory.',
     links,
     `Production tools are restricted by this bridge to build, export, and polish. When the user requests one, use ${prefix}production__production_start_job if production is connected; do not claim this workspace lacks build/export tools based only on the global read-only connection. Then use ${prefix}production__production_job_status and ${prefix}production__production_job_logs to report the result; never claim success from a queued job alone.`,
     `If ${prefix}workspace_connection_status reports a disconnected service, report which service is disconnected and do not substitute another wiki or use local filesystem tools to read remote documents.`,
@@ -125,6 +126,17 @@ function documentUrl(pathValue, serveUrl) {
   const href = `${serveUrl.replace(/\/+$/, '')}/${encodedPath}?view=document`;
   const fragment = fragmentParts.join('#');
   return fragment ? `${href}#${encodeURIComponent(fragment)}` : href;
+}
+
+function graphUrl(queryValue, serveUrl) {
+  if (!serveUrl) throw new Error('No Serve browser URL is configured for this workspace.');
+  if (typeof queryValue !== 'string' || queryValue.length > 500) {
+    throw new Error('query must be a search phrase of at most 500 characters.');
+  }
+  const url = new URL(`${serveUrl.replace(/\/+$/, '')}/graph`);
+  const query = queryValue.trim();
+  if (query) url.searchParams.set('q', query);
+  return url.href;
 }
 
 async function readConfig() {
@@ -242,6 +254,8 @@ async function discoverTools(connection, allowlist, namespace, exposed, config) 
               idempotentHint: true,
             };
           }
+        } else if (namespace === 'wiki' && tool.name === 'wiki_graph_view') {
+          item.description = `${tool.description ?? ''} In DeepSeek Harness, the bridge keeps the structured nodes and edges but removes the SVG image block because Harness does not accept SVG as MCP image input. Use workspace_graph_url to give the user a link to the interactive Serve graph; this is an image-format limitation, not a failed graph request.`.trim();
         }
         const boundEndpoint = namespace === 'production' ? config.production?.url.href : config.wiki.url.href;
         item.description = `Fixed workspace binding: ${config.workspace.name} (${config.workspace.slug}), ${namespace} endpoint ${boundEndpoint}. This tool can access only the workspace configured for this Harness Workspace. ${item.description ?? ''}`.trim();
@@ -301,8 +315,19 @@ async function main() {
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
   };
+  const graphUrlTool = {
+    name: 'workspace_graph_url',
+    title: 'Open workspace knowledge graph in Serve',
+    description: 'Build a browser link to this workspace’s interactive Serve graph, optionally prefilled with a search phrase, concept, or tag.',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string', maxLength: 500, description: 'Optional search phrase, concept, or tag to prefill in the graph.' } },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+  };
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [statusTool, documentUrlTool, ...[...exposed.keys()].filter((name) => !name.startsWith('tool:')).map((name) => exposed.get(`tool:${name}`))],
+    tools: [statusTool, documentUrlTool, graphUrlTool, ...[...exposed.keys()].filter((name) => !name.startsWith('tool:')).map((name) => exposed.get(`tool:${name}`))],
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args = {} } = request.params;
@@ -332,6 +357,13 @@ async function main() {
         return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
       }
     }
+    if (name === graphUrlTool.name) {
+      try {
+        return { content: [{ type: 'text', text: graphUrl(args.query ?? '', config.serve?.url) }] };
+      } catch (error) {
+        return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+      }
+    }
     const target = exposed.get(name);
     if (!target) {
       return { isError: true, content: [{ type: 'text', text: `Tool refused: ${name} is not enabled for this wiki workspace.` }] };
@@ -342,11 +374,26 @@ async function main() {
       }
     }
     try {
-      return await target.connection.client.callTool(
+      const result = await target.connection.client.callTool(
         { name: target.rawName, arguments: args },
         undefined,
         { signal: extra.signal },
       );
+      if (target.namespace === 'wiki' && target.rawName === 'wiki_graph_view' && Array.isArray(result.content)) {
+        const hasSvg = result.content.some((block) => block?.type === 'image' && block.mimeType === 'image/svg+xml');
+        if (hasSvg) {
+          const selector = args.concept ?? args.tag ?? (args.node ? basename(String(args.node), '.md') : '');
+          let link = '';
+          try { link = graphUrl(String(selector), config.serve?.url); } catch {}
+          const content = result.content.filter((block) => !(block?.type === 'image' && block.mimeType === 'image/svg+xml'));
+          content.push({
+            type: 'text',
+            text: `Harness cannot display the SVG image returned with this graph. The structured graph data above is valid.${link ? ` Open the interactive graph in Serve: ${link}` : ' No Serve URL is configured; ask the user to configure one to open the interactive graph.'}`,
+          });
+          return { ...result, content };
+        }
+      }
+      return result;
     } catch (error) {
       return {
         isError: true,
