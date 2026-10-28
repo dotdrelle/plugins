@@ -1,9 +1,9 @@
 ---
-name: llm-wiki
+name: donna
 description: Use the connected llm-wiki MCP server to search, read, cite, traverse, and explicitly update a local Markdown knowledge base.
 ---
 
-# llm-wiki workflow
+# Donna workflow
 
 The Claude extension discovers all registered workspaces and maintains one
 active workspace for the session. If several are available, call

@@ -8,7 +8,7 @@ nor `serve`.
 It produces two complementary Claude files:
 
 - `dist/llm-wiki-claude.mcpb`: the local MCP extension (`wiki_*` tools);
-- `dist/llm-wiki.plugin`: the `llm-wiki` Claude skill and its instructions.
+- `dist/llm-wiki.plugin`: the `/donna` Claude skill and its instructions.
 
 A single extension gives access to **all** the workspaces of the registry:
 there is no package per workspace.
@@ -80,7 +80,7 @@ Claude's folder picker wants the resolved absolute path, not `$(...)`.
 ### Claude skill
 
 `Claude Desktop → Settings → Plugins → Import plugin`, then choose
-`dist/llm-wiki.plugin`. The plugin contains only the `llm-wiki` skill and the
+`dist/llm-wiki.plugin`. The plugin contains only the `/donna` skill and the
 `run-wiki-skill.py` script; it starts no MCP server.
 
 ## Update
