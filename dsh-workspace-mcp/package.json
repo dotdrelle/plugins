@@ -1,0 +1,41 @@
+{
+  "name": "@momojie-s/dsh-workspace-mcp",
+  "version": "0.3.0",
+  "description": "DSH 插件: 按 workspace(session cwd) 自动加载/卸载 MCP server, 工具注册到 agent scope",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-invariants": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-subprocess": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-tools": "^0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "chokidar": "^5.0.0",
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
