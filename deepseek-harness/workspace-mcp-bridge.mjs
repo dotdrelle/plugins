@@ -80,9 +80,10 @@ function endpointUrl(value, label) {
   } catch {
     throw new Error(`${label} must be an absolute HTTPS URL.`);
   }
-  const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  const localHttp = url.protocol === 'http:'
+    && (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || /^192\.168\.\d+\.\d+$/.test(url.hostname));
   if (url.protocol !== 'https:' && !localHttp) {
-    throw new Error(`${label} must use HTTPS. HTTP is allowed only for localhost development.`);
+    throw new Error(`${label} must use HTTPS. HTTP is allowed only for localhost or a 192.168.x.x address.`);
   }
   if (url.username || url.password || url.search || url.hash) {
     throw new Error(`${label} must not embed credentials, query parameters, or a fragment.`);

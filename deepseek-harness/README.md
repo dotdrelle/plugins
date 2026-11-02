@@ -242,7 +242,8 @@ The helper stores endpoint credentials in the generated
 `.dsh/llm-wiki-mcp.json`, with owner-only file permissions, and adds it to the
 workspace `.gitignore`. It never prints tokens. Keep the config file private;
 do not commit or sync it to a shared repository. The remote bridge requires
-HTTPS except for localhost development, rejects credentials embedded in URLs,
+HTTPS except on localhost or a `192.168.x.x` address (where tokens travel in
+clear on the local network), rejects credentials embedded in URLs,
 reports disconnected endpoints, and refuses production job types outside the
 three deliverable operations.
 
