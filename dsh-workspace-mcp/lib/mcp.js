@@ -196,14 +196,14 @@ export function resolveReconnectPolicy(base, override, label) {
     for (const key of ["initialDelayMs", "maxDelayMs"]) {
         const v = merged[key];
         if (!Number.isFinite(v) || v <= 0 || v > MAX_TIMER_DELAY_MS) {
-            throw new Error(`${label}: reconnect.${key} 需为不大于 ${MAX_TIMER_DELAY_MS} 的正数`);
+            throw new Error(`${label}: reconnect.${key} must be a positive number no greater than ${MAX_TIMER_DELAY_MS}`);
         }
     }
     if (merged.initialDelayMs > merged.maxDelayMs) {
-        throw new Error(`${label}: reconnect.initialDelayMs 不能大于 reconnect.maxDelayMs`);
+        throw new Error(`${label}: reconnect.initialDelayMs cannot exceed reconnect.maxDelayMs`);
     }
     if (!Number.isInteger(merged.maxAttempts) || merged.maxAttempts < 1) {
-        throw new Error(`${label}: reconnect.maxAttempts 需为正整数`);
+        throw new Error(`${label}: reconnect.maxAttempts must be a positive integer`);
     }
     return merged;
 }
@@ -280,7 +280,7 @@ async function syncTools(generation, agentCtx, serverName, cfg, previous, log, o
         for (const tool of resp.tools) {
             const publicName = publicToolName(serverName, tool.name);
             if (definitions.has(publicName)) {
-                throw new Error(`server "${serverName}": server 列出的工具 "${tool.name}" 与已有工具归一化后同名（${publicName}）——非法工具列表`);
+                throw new Error(`server "${serverName}": the server lists tool "${tool.name}", which normalizes to the same name as an existing tool (${publicName}): invalid tool list`);
             }
             definitions.set(publicName, buildToolDefinition(generation, serverName, tool, cfg, onSessionLoss));
         }
@@ -290,7 +290,7 @@ async function syncTools(generation, agentCtx, serverName, cfg, previous, log, o
         try {
             d();
         }
-        catch { /* 忽略 */ }
+        catch { /* ignored */ }
     }
     const disposers = new Map();
     try {
@@ -303,12 +303,12 @@ async function syncTools(generation, agentCtx, serverName, cfg, previous, log, o
             try {
                 d();
             }
-            catch { /* 忽略 */ }
+            catch { /* ignored */ }
         }
-        log(`server "${serverName}": 工具注册失败，本代 0 个工具（已整代回滚）: ${e?.message ?? e}`);
+        log(`server "${serverName}": tool registration failed, 0 tools in this generation (rolled back): ${e?.message ?? e}`);
         return new Map();
     }
-    log(`server "${serverName}": 注册 ${disposers.size} 个工具`);
+    log(`server "${serverName}": registered ${disposers.size} tools`);
     return disposers;
 }
 /**
@@ -370,7 +370,7 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
     function reportSessionLoss(generation) {
         if (!isCurrent(generation))
             return;
-        log(`${label}: server 会话已失效（如 Session not found），判定断线并重连`);
+        log(`${label}: server session expired (e.g. Session not found), treating as disconnected and reconnecting`);
         generation.close().catch(() => { });
         generationDown(generation);
     }
@@ -389,8 +389,8 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
         const lostEstablished = connectedAt !== undefined;
         if (!policy.enabled) {
             const message = lostEstablished
-                ? "连接断开且重连已禁用——已注册工具将持续失败，改配置文件或重启可恢复"
-                : "连接失败且重连已禁用——未注册任何工具，改配置文件或重启可重试";
+                ? "connection lost and reconnection disabled: registered tools will keep failing; edit the configuration file or restart to recover"
+                : "connection failed and reconnection disabled: no tools registered; edit the configuration file or restart to retry";
             log(`${label}: ${message}`);
             return;
         }
@@ -406,16 +406,16 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
                     try {
                         d();
                     }
-                    catch { /* 忽略 */ }
+                    catch { /* ignored */ }
                 }
                 disposers = new Map();
             });
-            log(`${label}: 连续 ${policy.maxAttempts} 次重连失败，放弃——工具已全部卸载；改配置文件或重启可重试`);
+            log(`${label}: ${policy.maxAttempts} consecutive reconnection failures, giving up: all tools unloaded; edit the configuration file or restart to retry`);
             return;
         }
         const delayMs = Math.min(policy.maxDelayMs, policy.initialDelayMs * 2 ** (failedAttempts - 1));
-        const action = lostEstablished ? "连接断开" : "连接失败";
-        log(`${label}: ${action}，${delayMs}ms 后重连（第 ${failedAttempts}/${policy.maxAttempts} 次）`);
+        const action = lostEstablished ? "connection lost" : "connection failed";
+        log(`${label}: ${action}, reconnecting in ${delayMs}ms (attempt ${failedAttempts}/${policy.maxAttempts})`);
         reconnectTimer = setTimeout(() => {
             reconnectTimer = undefined;
             settling = connectGeneration();
@@ -444,7 +444,7 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
         generation.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
             if (!isCurrent(generation))
                 return;
-            log(`${label}: 工具列表变化，重新同步`);
+            log(`${label}: tool list changed, resynchronizing`);
             try {
                 await enqueueSync(generation);
             }
@@ -454,7 +454,7 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
                 if (isSessionLossError(e))
                     reportSessionLoss(generation);
                 else
-                    log(`${label}: 工具重同步失败: ${e?.message ?? e}`);
+                    log(`${label}: tool resynchronization failed: ${e?.message ?? e}`);
             }
         });
         try {
@@ -470,11 +470,11 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
             if (firstAttemptError === undefined)
                 firstAttemptError = e;
             if (isCurrent(generation))
-                log(`${label}: 连接尝试失败: ${e?.message ?? e}`);
+                log(`${label}: connection attempt failed: ${e?.message ?? e}`);
             try {
                 await generation.close();
             }
-            catch { /* 忽略 */ }
+            catch { /* ignored */ }
             const quiesced = hasClosed() || (await waitForClose(closed));
             attemptSettled = true;
             if (!isCurrent(generation))
@@ -482,7 +482,7 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
             if (!quiesced) {
                 client = undefined;
                 clientClosed = undefined;
-                log(`${label}: 失败一代未在 ${GENERATION_CLOSE_TIMEOUT_MS}ms 内关闭——为避免 server 进程重叠，停止重连；改配置文件或重启可重试`);
+                log(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms: stopping reconnection to avoid overlapping server processes; edit the configuration file or restart to retry`);
                 return;
             }
             generationDown(generation);
@@ -497,7 +497,7 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
             return;
         connectedAt = Date.now();
         if (failedAttempts > 0) {
-            log(`${label}: 重连成功，工具已重新同步（第 ${failedAttempts}/${policy.maxAttempts} 次尝试）`);
+            log(`${label}: reconnected, tools resynchronized (attempt ${failedAttempts}/${policy.maxAttempts})`);
         }
     }
     let settling = connectGeneration();
@@ -507,7 +507,7 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
         ready: firstSettling.then(() => {
             if (client !== undefined)
                 return {};
-            return { error: firstAttemptError ?? new Error(`${label}: 初始连接失败`) };
+            return { error: firstAttemptError ?? new Error(`${label}: initial connection failed`) };
         }),
         async dispose() {
             disposed = true;
@@ -523,9 +523,9 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
                 try {
                     await current.close();
                 }
-                catch { /* 忽略 */ }
+                catch { /* ignored */ }
                 if (currentClosed !== undefined && !(await waitForClose(currentClosed))) {
-                    log(`${label}: dispose 时一代连接未在 ${GENERATION_CLOSE_TIMEOUT_MS}ms 内关闭，server 关闭可能不完整`);
+                    log(`${label}: a generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms during dispose, server shutdown may be incomplete`);
                 }
             }
             await settling;
@@ -534,7 +534,7 @@ export function startSupervisedConnection(agentCtx, serverName, cfg, policy, log
                 try {
                     d();
                 }
-                catch { /* 忽略 */ }
+                catch { /* ignored */ }
             }
             disposers = new Map();
         },

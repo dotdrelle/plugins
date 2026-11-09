@@ -37,17 +37,17 @@ export function loadWorkspaceMcpConfig(cwd, relativePath = ".dsh/mcp.servers.yml
     catch (e) {
         if (e?.code === "ENOENT")
             return null;
-        throw new Error(`workspace-mcp: 读取配置失败 ${filePath}: ${e?.message ?? e}`);
+        throw new Error(`workspace-mcp: failed to read configuration ${filePath}: ${e?.message ?? e}`);
     }
     const parsed = yaml.load(raw);
     if (typeof parsed !== "object" || parsed === null) {
-        throw new Error(`workspace-mcp: ${filePath} 顶层必须是 mapping`);
+        throw new Error(`workspace-mcp: ${filePath} top level must be a mapping`);
     }
     const serversRaw = parsed.servers;
     if (serversRaw === undefined)
         return { servers: {} };
     if (typeof serversRaw !== "object" || serversRaw === null) {
-        throw new Error(`workspace-mcp: ${filePath} 的 servers 必须是 mapping`);
+        throw new Error(`workspace-mcp: ${filePath} servers must be a mapping`);
     }
     const servers = {};
     for (const [name, cfg] of Object.entries(serversRaw)) {
@@ -58,24 +58,24 @@ export function loadWorkspaceMcpConfig(cwd, relativePath = ".dsh/mcp.servers.yml
 /** 校验单个 server 配置。 */
 function validateServerConfig(filePath, name, cfg) {
     if (!SERVER_NAME_PATTERN.test(name)) {
-        throw new Error(`workspace-mcp: ${filePath} server 名 "${name}" 非法（需匹配 ${SERVER_NAME_PATTERN}）`);
+        throw new Error(`workspace-mcp: ${filePath} invalid server name "${name}" (must match ${SERVER_NAME_PATTERN})`);
     }
     if (typeof cfg !== "object" || cfg === null) {
-        throw new Error(`workspace-mcp: ${filePath} server "${name}" 必须是 mapping`);
+        throw new Error(`workspace-mcp: ${filePath} server "${name}" must be a mapping`);
     }
     const transport = cfg.transport;
     if (transport !== "stdio" && transport !== "streamable-http") {
-        throw new Error(`workspace-mcp: ${filePath} server "${name}" transport 必须是 "stdio" 或 "streamable-http"`);
+        throw new Error(`workspace-mcp: ${filePath} server "${name}" transport must be "stdio" or "streamable-http"`);
     }
     const out = { transport };
     if (transport === "stdio") {
         if (typeof cfg.command !== "string") {
-            throw new Error(`workspace-mcp: ${filePath} server "${name}" (stdio) 缺 command`);
+            throw new Error(`workspace-mcp: ${filePath} server "${name}" (stdio) is missing command`);
         }
         out.command = cfg.command;
         if (cfg.args !== undefined) {
             if (!Array.isArray(cfg.args) || !cfg.args.every((a) => typeof a === "string")) {
-                throw new Error(`workspace-mcp: ${filePath} server "${name}" args 必须是字符串数组`);
+                throw new Error(`workspace-mcp: ${filePath} server "${name}" args must be an array of strings`);
             }
             out.args = cfg.args;
         }
@@ -86,7 +86,7 @@ function validateServerConfig(filePath, name, cfg) {
     }
     else {
         if (typeof cfg.url !== "string") {
-            throw new Error(`workspace-mcp: ${filePath} server "${name}" (streamable-http) 缺 url`);
+            throw new Error(`workspace-mcp: ${filePath} server "${name}" (streamable-http) is missing url`);
         }
         out.url = cfg.url;
         if (cfg.headers !== undefined)
@@ -94,7 +94,7 @@ function validateServerConfig(filePath, name, cfg) {
     }
     if (cfg.toolCallTimeoutMs !== undefined) {
         if (typeof cfg.toolCallTimeoutMs !== "number" || cfg.toolCallTimeoutMs <= 0) {
-            throw new Error(`workspace-mcp: ${filePath} server "${name}" toolCallTimeoutMs 必须是正数`);
+            throw new Error(`workspace-mcp: ${filePath} server "${name}" toolCallTimeoutMs must be a positive number`);
         }
         out.toolCallTimeoutMs = cfg.toolCallTimeoutMs;
     }
@@ -106,31 +106,31 @@ function validateServerConfig(filePath, name, cfg) {
 /** 校验 per-server reconnect 覆盖块（shape 级；跨字段边界在 resolveReconnectPolicy 判）。 */
 function validateReconnect(v, filePath, name) {
     if (typeof v !== "object" || v === null) {
-        throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect 必须是 mapping`);
+        throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect must be a mapping`);
     }
     for (const key of Object.keys(v)) {
         if (!["enabled", "initialDelayMs", "maxDelayMs", "maxAttempts"].includes(key)) {
-            throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.${key} 不是合法字段`);
+            throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.${key} is not a valid field`);
         }
     }
     const out = {};
     if (v.enabled !== undefined) {
         if (typeof v.enabled !== "boolean") {
-            throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.enabled 必须是 boolean`);
+            throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.enabled must be a boolean`);
         }
         out.enabled = v.enabled;
     }
     for (const key of ["initialDelayMs", "maxDelayMs"]) {
         if (v[key] !== undefined) {
             if (typeof v[key] !== "number" || !Number.isFinite(v[key]) || v[key] <= 0) {
-                throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.${key} 必须是正数`);
+                throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.${key} must be a positive number`);
             }
             out[key] = v[key];
         }
     }
     if (v.maxAttempts !== undefined) {
         if (typeof v.maxAttempts !== "number" || !Number.isInteger(v.maxAttempts) || v.maxAttempts < 1) {
-            throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.maxAttempts 必须是正整数`);
+            throw new Error(`workspace-mcp: ${filePath} server "${name}" reconnect.maxAttempts must be a positive integer`);
         }
         out.maxAttempts = v.maxAttempts;
     }
@@ -138,7 +138,7 @@ function validateReconnect(v, filePath, name) {
 }
 function normalizeStringMap(v, filePath, name, field) {
     if (typeof v !== "object" || v === null) {
-        throw new Error(`workspace-mcp: ${filePath} server "${name}" ${field} 必须是 string→string mapping`);
+        throw new Error(`workspace-mcp: ${filePath} server "${name}" ${field} must be a string-to-string mapping`);
     }
     const out = {};
     for (const [k, val] of Object.entries(v)) {

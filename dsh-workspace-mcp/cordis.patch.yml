@@ -1,7 +1,7 @@
-# @momojie-s/dsh-workspace-mcp 组合包 patch 层：被 profile bundles 列表引用时应用。
-# 行 name 用包名（非 file:// URL），由 Node 模块解析到已安装的包。
+# @momojie-s/dsh-workspace-mcp bundle patch layer: applied when listed in the profile bundles.
+# The line name is the package name (not a file:// URL), resolved by Node to the installed package.
 - insert:
     - id: workspace-mcp
       name: '@momojie-s/dsh-workspace-mcp'
       config:
-        configFile: '.dsh/mcp.servers.yml'   # 默认值，显式写出便于覆盖
+        configFile: '.dsh/mcp.servers.yml'   # default, written out so it is easy to override

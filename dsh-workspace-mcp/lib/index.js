@@ -44,7 +44,7 @@ function apply(ctx, config) {
         if (config.verbose)
             console.error(`[ws-mcp] ${msg}`);
     };
-    log(`插件已加载，configFile=${config.configFile}`);
+    log(`plugin loaded, configFile=${config.configFile}`);
     const bus = ctx;
     // agent/created 即启动 MCP 连接 + 工具注册（fire-and-forget）：
     // web 会话创建与用户首条消息之间有秒级间隔，localhost MCP 握手毫秒级完成，
@@ -58,7 +58,7 @@ function apply(ctx, config) {
             return;
         initedAgents.add(agent);
         initAgent(agent, config, log).catch((e) => {
-            log(`初始化失败: ${e?.message ?? e}`);
+            log(`initialization failed: ${e?.message ?? e}`);
         });
     }, { global: true });
     bus.on("agent/pre-step", async ({ agent }, next) => {
@@ -77,7 +77,7 @@ function apply(ctx, config) {
         const state = statesByAgent.get(agentId);
         if (state) {
             teardownAgent(agentId, state, log);
-            log(`agent/disposed: 已清理`);
+            log(`agent/disposed: cleaned up`);
         }
     }, { global: true });
     // Fiber dispose（HMR 重载 / 插件停止 / 卸载）时清理所有 agent 的资源：
@@ -88,7 +88,7 @@ function apply(ctx, config) {
                 teardownAgent(agentId, state, log);
             }
             statesByAgent.clear();
-            log(`插件卸载：已清理全部 agent 资源`);
+            log(`plugin unloaded: all agent resources cleaned up`);
         };
     });
 }
@@ -116,15 +116,15 @@ async function initAgent(agent, config, log) {
                 clearTimeout(state.reloadTimer);
             state.reloadTimer = setTimeout(() => {
                 state.reloadTimer = undefined;
-                log(`配置文件变化，重新加载: ${cfgPath}`);
+                log(`configuration file changed, reloading: ${cfgPath}`);
                 reloadAgent(agentId, agentCtx, cwd, config, state, log).catch((e) => {
-                    log(`重新加载失败: ${e?.message ?? e}`);
+                    log(`reload failed: ${e?.message ?? e}`);
                 });
             }, config.reloadDebounceMs);
         });
     }
     catch (e) {
-        log(`配置文件监听建立失败: ${e?.message ?? e}`);
+        log(`failed to watch the configuration file: ${e?.message ?? e}`);
     }
 }
 /** （重新）加载一个 agent 的 MCP server: 先卸载旧的（等连接静默关闭），再连接新的。 */
@@ -143,14 +143,14 @@ async function reloadAgent(agentId, agentCtx, cwd, config, state, log) {
             mcpConfig = loadWorkspaceMcpConfig(cwd, config.configFile);
         }
         catch (e) {
-            log(`配置读取失败: ${e?.message ?? e}`);
+            log(`failed to read configuration: ${e?.message ?? e}`);
             return;
         }
         if (!mcpConfig || Object.keys(mcpConfig.servers).length === 0) {
-            log(`cwd=${cwd} 无 MCP 配置`);
+            log(`cwd=${cwd} has no MCP configuration`);
             return;
         }
-        log(`加载: cwd=${cwd}，${Object.keys(mcpConfig.servers).length} 个 server`);
+        log(`loading: cwd=${cwd}, ${Object.keys(mcpConfig.servers).length} server(s)`);
         // 每个server一条受监督连接：启动后自管理重连/重同步，无需 await 完成
         await Promise.all(Object.entries(mcpConfig.servers).map(async ([serverName, serverCfg]) => {
             try {
@@ -158,7 +158,7 @@ async function reloadAgent(agentId, agentCtx, cwd, config, state, log) {
                 state.handles.push(startSupervisedConnection(agentCtx, serverName, serverCfg, policy, log));
             }
             catch (e) {
-                log(`server "${serverName}" 配置异常: ${e?.message ?? e}`);
+                log(`server "${serverName}" invalid configuration: ${e?.message ?? e}`);
             }
         }));
     }

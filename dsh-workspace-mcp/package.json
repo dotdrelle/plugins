@@ -1,7 +1,7 @@
 {
   "name": "@momojie-s/dsh-workspace-mcp",
   "version": "0.3.0",
-  "description": "DSH 插件: 按 workspace(session cwd) 自动加载/卸载 MCP server, 工具注册到 agent scope",
+  "description": "DSH plugin: loads and unloads MCP servers per workspace (session cwd), with tools registered in the agent scope",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

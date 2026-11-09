@@ -1,14 +1,16 @@
 # @momojie-s/dsh-workspace-mcp
 
-DSH 插件：按 **workspace（session cwd）** 自动加载/卸载 MCP server——每个项目自己的 `.dsh/mcp.servers.yml` 只在自己的会话生效，MCP 工具注册到 agent scope，随 agent 生灭自动回收，不同项目的 MCP 互不干扰。
+A DSH plugin that loads and unloads MCP servers per **workspace (session cwd)**. A project's `.dsh/mcp.servers.yml` applies only to that project's sessions. Its MCP tools are registered in the agent scope and released with the agent, so projects never interfere with each other.
 
-## 环境要求
+This is a compiled copy of the upstream project; see [VENDORED.md](VENDORED.md). The upstream README is in Chinese, this is its translation.
 
-- DSH `>= 0.1.0-rc.6`（已验证至 `0.2.0-rc.2`）
+## Requirements
 
-## 用法
+- DSH `>= 0.1.0-rc.6` (verified up to `0.2.0-rc.2`)
 
-项目根放 `.dsh/mcp.servers.yml`：
+## Usage
+
+Put `.dsh/mcp.servers.yml` at the project root:
 
 ```yaml
 servers:
@@ -24,87 +26,73 @@ servers:
       Authorization: "Bearer <token>"
 ```
 
-字段与 `@deepseek-ai/dsh-mcp-client` 对齐（`transport` / `command` / `args` / `env` / `url` / `headers` / `toolCallTimeoutMs` / `reconnect`）。
+Fields match `@deepseek-ai/dsh-mcp-client` (`transport` / `command` / `args` / `env` / `url` / `headers` / `toolCallTimeoutMs` / `reconnect`).
 
-- agent 创建即连接注册（`agent/created`），**首个模型请求就含这些工具**；headless "create 后立刻发消息" 的竞速场景第 1 步可能没有，第 2 步必有
-- **断线自动重连**（移植官方 dsh-mcp-client 的 supervisor）：启动失败与中途断线均按指数退避重连并重新注册工具；重连期间旧工具保持注册（调用会失败），server 恢复后自动换新。stdio = 重新 spawn，http = 重新握手
-- **会话失效自愈**（≥0.2.1，官方 client 尚无此能力）：streamable-http server 重启/会话驱逐后的 `Session not found` 类错误自动判定断线并换代重连，无需手动"强制重连"
-- **stdio 环境继承**（≥0.3.0，与全局 MCP 一致）：子进程拿到 scrubbed 父环境（剥 `KEY|PASSWORD|SECRET|TOKEN` 命中名与 `DSH_*` 前缀名）+ yml `env` 覆盖层——需要父环境变量（如 `PYTHONPATH`）的 server 直接工作；yml `env` 是覆盖层不是完整环境
-- server 声明受支持的 `outputSchema` 时进入 `structuredContent` 输出契约；非法工具列表 / 注册名冲突整代拒绝/回滚（≥0.3.0，官方对齐）
-- server 发 `toolListChanged` 通知时自动重同步工具列表
-- 改配置文件由 chokidar 监听，保存即重载；无该文件的目录不加载任何 MCP
+- Connection and registration happen when the agent is created (`agent/created`), so **the first model request already has these tools**. In the headless "create, then send a message at once" race, step 1 may lack them; step 2 always has them.
+- **Automatic reconnection** (ported from the official dsh-mcp-client supervisor): a failed start or a lost connection reconnects with exponential backoff and registers the tools again. The old tools stay registered meanwhile (calls fail) and are replaced once the server is back. For stdio this respawns the process; for HTTP it repeats the handshake.
+- **Session recovery** (>= 0.2.1, not yet in the official client): after a streamable-http server restart or session eviction, errors such as `Session not found` count as a disconnection and trigger a new connection, with no manual forced reconnect.
+- **stdio environment inheritance** (>= 0.3.0, same as global MCP): the child process gets a scrubbed parent environment (names matching `KEY|PASSWORD|SECRET|TOKEN` and names starting with `DSH_` are removed) plus the yml `env` as an overlay. Servers that need a parent variable such as `PYTHONPATH` just work; the yml `env` is an overlay, not the whole environment.
+- A server declaring a supported `outputSchema` enters the `structuredContent` output contract. An invalid tool list or a registered-name conflict rejects or rolls back the whole generation (>= 0.3.0, aligned with the official client).
+- A `toolListChanged` notification from the server resynchronizes the tool list.
+- chokidar watches the configuration file, so saving reloads it. A directory without this file loads no MCP server.
 
-### headless/tui profile 临时挂载
+### Temporary mount in headless/tui profiles
 
-这两个 profile 默认没挂 workspace-mcp，需要时用 `--patch` 临时挂 `file:///` 行指向其 lib（纯 host 半部插件可临时这样挂，带浏览器半部的插件不行）：
+These two profiles do not mount workspace-mcp by default. When needed, use `--patch` to mount a `file:///` line pointing at its lib. This works for host-only plugins, not for plugins with a browser half:
 
 ```bash
 dsh --profile headless --patch <(echo "- insert:
     - id: workspace-mcp
-      name: file:///D:/code/workspace/deepseek-harness-101/plugins/dsh-workspace-mcp/lib/index.js") "任务…"
+      name: file:///D:/code/workspace/deepseek-harness-101/plugins/dsh-workspace-mcp/lib/index.js") "task..."
 ```
 
-### 与全局 MCP 的同名遮蔽（实测结论）
+### Shadowing global MCP servers of the same name (measured)
 
-两边工具名都是 `mcp__<serverName>__<tool>`，冲突语义来自 DSH 工具注册表——agent 作用域遮蔽全局（per-tool，按名字逐个遮蔽）：
+Tool names are `mcp__<serverName>__<tool>` on both sides. Conflicts follow the DSH tool registry: the agent scope shadows the global scope, tool by tool.
 
-| 场景 | 行为 |
+| Case | Behaviour |
 |---|---|
-| serverName 不同 | 共存，两组工具模型都可见（正常用法） |
-| 同 serverName（工具名撞车） | 项目级赢：模型看到并调用的都是项目版（web 从第 1 步起；竞速输了的场景第 1 步可能暂用全局版，第 2 步起项目版）。全局版对没配此 server 的其它 workspace 不受影响 |
-| 全局 patch 里两条同 serverName | 后者整代注册回滚，日志报 `already registered`，该 server 一个工具都没有 |
-| 同一个 yml 里重复 server 键 | YAML 后键覆盖前键 |
+| Different serverName | Both coexist and the model sees both sets of tools (normal use) |
+| Same serverName (tool names collide) | The project wins: the model sees and calls the project version (from step 1 on web; if the race is lost, step 1 may use the global version, then the project version from step 2). The global version is unaffected in other workspaces without this server |
+| Two entries with the same serverName in the global patch | The later generation's registration rolls back entirely, the log reports `already registered`, and that server has no tools |
+| Duplicate server key in one yml | The later YAML key overrides the earlier one |
 
-同名遮蔽是刻意覆盖的正规姿势（如把全局 server 指向本地 dev 实例调试）；无意撞名就改 serverName。若两边工具列表不完全一致，只有重名的那部分被遮蔽，其余各自可见。
+Deliberate shadowing is a legitimate technique, for example to point a global server at a local dev instance. If a collision is accidental, rename the server. If the two tool lists differ, only the same-named tools are shadowed; the others stay visible on each side.
 
-## 安装
+## Installation
 
-本插件是**组合包**（`dsh.bundle`），用 `dsh plugin` 安装进 profile，自动追加配置层，无需手编 patch：
+In Harness Desktop, under Plugins > Add plugin > Install a third-party plugin:
+
+```text
+git+https://github.com/dotdrelle/plugins.git#main&path:/dsh-workspace-mcp
+```
+
+For another profile, from the command line:
 
 ```bash
-# GitHub（私仓需 git 凭据；pnpm ≥10 首次 add 会提示授权构建，按提示把包键
-# 写进 ~/.dsh/profiles/web/pnpm-workspace.yaml 的 allowBuilds 后重新 add）
-dsh plugin --profile web add github:Momojie-S/dsh-workspace-mcp
-
-# 或 tarball（pnpm pack 产物，无授权要求）
-dsh plugin --profile web add momojie-s-dsh-workspace-mcp-0.2.0.tgz
+dsh plugin --profile web add 'git+https://github.com/dotdrelle/plugins.git#main&path:/dsh-workspace-mcp'
 ```
 
-验证层就位后重启 DSH：
+The plugin is a **bundle** (`dsh.bundle`): installing it adds its configuration layer, with no patch to edit by hand. Restart DSH once the layer is in place. To verify it:
 
 ```bash
-dsh web --dump-config | Select-String workspace-mcp   # 应看到对应层
+dsh web --dump-config | grep workspace-mcp
 ```
 
-<details><summary>开发模式：源码直连（改代码 → 重启验证）</summary>
+## Configuration
 
-编译 `npm install && npm run build`，profile 的 `cordis.patch.yml` 手动加行（`name` 用 `file:///` URL 指向 `lib/index.js`）：
+Plugin level (patch `config` field):
 
-```yaml
-- insert:
-    - id: workspace-mcp
-      name: file:///D:/code/workspace/deepseek-harness-101/plugins/dsh-workspace-mcp/lib/index.js
-      config:
-        configFile: '.dsh/mcp.servers.yml'
-        verbose: true
-```
-
-</details>
-
-## 配置
-
-插件级（patch `config` 字段）：
-
-| 字段 | 默认值 | 说明 |
+| Field | Default | Description |
 |------|--------|------|
-| `configFile` | `.dsh/mcp.servers.yml` | 相对 workspace 根的配置文件路径 |
-| `verbose` | `false` | 输出连接/注册详细日志，排查用 |
-| `reconnect.enabled` | `true` | 断线/启动失败是否自动重连 |
-| `reconnect.initialDelayMs` | `500` | 首次重连延迟，此后指数翻倍 |
-| `reconnect.maxDelayMs` | `30000` | 退避封顶；连接存活超此值则重置尝试预算（偶发崩的能无限恢复，crash-loop 的被掐掉） |
-| `reconnect.maxAttempts` | `10` | 一次断线周期内最大连续失败次数，耗尽后卸载该 server 全部工具；改配置文件或重启恢复 |
+| `configFile` | `.dsh/mcp.servers.yml` | Configuration file path, relative to the workspace root |
+| `verbose` | `false` | Detailed connection and registration logs, for troubleshooting |
+| `reconnect.enabled` | `true` | Reconnect automatically after a disconnection or a failed start |
+| `reconnect.initialDelayMs` | `500` | First reconnection delay, then doubled each time |
+| `reconnect.maxDelayMs` | `30000` | Backoff ceiling. A connection alive for longer resets the attempt budget, so occasional crashes recover indefinitely while a crash loop is stopped |
+| `reconnect.maxAttempts` | `10` | Maximum consecutive failures in one disconnection cycle. Once exhausted, all the server's tools are unloaded; editing the configuration file or restarting recovers |
 
-per-server 覆盖（`.dsh/mcp.servers.yml`，同名项优先于插件级）：
+Per-server override (`.dsh/mcp.servers.yml`, takes priority over the plugin level):
 
 ```yaml
 servers:
@@ -118,24 +106,18 @@ servers:
       maxAttempts: 5
 ```
 
-## 验证
+## Verification
 
-项目根放 `.dsh/mcp.servers.yml` 配一个测试 server（如 MCP 官方 `server-everything`），在会话里让 agent 列工具：
+Put a `.dsh/mcp.servers.yml` with a test server (such as the official MCP `server-everything`) at the project root, and ask the agent in a session to list its tools:
 
 ```
 mcp__<serverName>__<toolName>
 ```
 
-工具出现即生效；切到无配置的目录，这些工具不再出现，即隔离生效。
+If the tools appear, it works. In a directory without configuration they no longer appear, which confirms the isolation.
 
-排障时挂载 config 开 `verbose: true`：连接/注册日志含 `[ws-mcp] server "xxx": 注册 N 个工具`（stdio 场景在 stderr）。
-
-断线重连的可执行验证（不经 DSH host）：
-
-```bash
-npm test   # 杀 server 子进程 → 自动重连恢复；启动失败 → 退避重试 → 放弃卸载；Session not found → 换代重连；官方对齐五项（env 继承/输出契约等）
-```
+To troubleshoot, set `verbose: true` in the mount config. The logs include `[ws-mcp] server "xxx": registered N tools` (on stderr for stdio).
 
 ---
 
-设计文档见 [docs/design/overview.md](docs/design/overview.md)；官方 dsh-mcp-client（全局/profile 级）的配置见合集仓库 `docs/official-usage/mcp.md`。
+The design documents and tests are in the [upstream repository](https://github.com/Momojie-S/dsh-workspace-mcp).
